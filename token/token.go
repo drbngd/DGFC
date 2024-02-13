@@ -1,7 +1,16 @@
 package token
 
+// convert to lower - DONE
+// capture identifiers properly - DONE
+// should the lexer decide the type or the parser -
+// arrays capture - no
+// string capture - yes
+// number with decimal upto one point - yes
+// comment verify - lexer
+
 type TokenType string
 
+// struct to represent a token
 type Token struct {
 	Type  TokenType
 	Value string
@@ -14,6 +23,7 @@ const (
 	// Identifiers + literals
 	IDENTIFIER = "IDENTIFIER"
 	NUMBER     = "NUMBER"
+	STRING     = "STRING"
 
 	// Operators
 	ASSIGN = ":="
@@ -56,10 +66,8 @@ const (
 	PROGRAM   = "program"
 	IS        = "is"
 	BEGIN     = "begin"
-	END_PROG  = "end program"
 	GLOBAL    = "global"
 	PROCEDURE = "procedure"
-	END_PROC  = "end procedure"
 	VARIABLE  = "variable"
 	INTEGER   = "integer"
 	FLOAT     = "float"
@@ -71,9 +79,7 @@ const (
 	IF        = "if"
 	THEN      = "then"
 	ELSE      = "else"
-	END_IF    = "end if"
 	FOR       = "for"
-	END_FOR   = "end for"
 	END       = "end"
 	RETURN    = "return"
 )

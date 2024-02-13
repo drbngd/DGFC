@@ -2,8 +2,10 @@ package lexer
 
 import (
 	"DGFC/token"
+	"strings"
 )
 
+// struct to represent a pointer to scan the input string
 type ScanPointer struct {
 	input    string
 	currPos  int  // current pointer position
@@ -11,13 +13,16 @@ type ScanPointer struct {
 	currChar byte // currChar at current position
 }
 
+// function to create a new ScanPointer
 func New(input string) *ScanPointer {
+	// first convert the input string to lower case
+	input = strings.ToLower(input)
 	sp := &ScanPointer{input: input}
 	sp.ReadNextChar()
 	return sp
 }
 
-// method to progress through "input" char-by-char
+// method to progress through input string char-by-char
 func (sp *ScanPointer) ReadNextChar() {
 	if sp.nextPos >= len(sp.input) {
 		sp.currChar = 0 // ASCII(0) is NUL
@@ -28,7 +33,7 @@ func (sp *ScanPointer) ReadNextChar() {
 	sp.nextPos += 1
 }
 
-// method to lex the next token
+// method to scan the next token
 func (sp *ScanPointer) NextToken() token.Token {
 	var tk token.Token
 
@@ -104,6 +109,16 @@ func (sp *ScanPointer) NextToken() token.Token {
 			sp.ReadNextChar()
 			tk = NewToken(token.EQ, "==")
 		}
+	case '"':
+		if sp.PeekNext() == '"' {
+			sp.ReadNextChar()
+			tk = NewToken(token.STRING, "\"\"")
+		} else {
+			sp.ReadNextChar()
+			temp_val := sp.ReadString()
+			sp.ReadNextChar()
+			tk = NewToken(token.STRING, "\""+temp_val+"\"")
+		}
 	case 0:
 		tk.Value = ""
 		tk.Type = token.EOF
@@ -142,16 +157,7 @@ func (sp *ScanPointer) PeekNext() byte {
 
 // function to check if character is a letter or underscore
 func IsLetter(c byte) bool {
-	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_'
-}
-
-// method to detect identifier
-func (sp *ScanPointer) ReadIdentifier() string {
-	startPos := sp.currPos
-	for IsLetter(sp.currChar) {
-		sp.ReadNextChar()
-	}
-	return sp.input[startPos:sp.currPos]
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
 // function to check if character is a digit
@@ -159,7 +165,29 @@ func IsDigit(c byte) bool {
 	return c >= '0' && c <= '9'
 }
 
-// method to detect a number -  integer and float
+// method to detect & read strings
+func (sp *ScanPointer) ReadString() string {
+	startPos := sp.currPos
+	for sp.PeekNext() != '"' {
+		sp.ReadNextChar()
+	}
+	sp.ReadNextChar()
+	return sp.input[startPos:sp.currPos]
+}
+
+// method to detect & read identifiers
+func (sp *ScanPointer) ReadIdentifier() string {
+	startPos := sp.currPos
+	if IsLetter(sp.currChar) {
+		sp.ReadNextChar()
+		for IsLetter(sp.currChar) || IsDigit(sp.currChar) || sp.currChar == '_' {
+			sp.ReadNextChar()
+		}
+	}
+	return sp.input[startPos:sp.currPos]
+}
+
+// method to detect & read a number -  integer and floating point
 func (sp *ScanPointer) ReadNumber() string {
 	startPos := sp.currPos
 	decimal_point_count := 0
@@ -173,36 +201,51 @@ func (sp *ScanPointer) ReadNumber() string {
 	return sp.input[startPos:sp.currPos]
 }
 
-// method to detect & skip whitespaces - new line, tab, space
+// method to detect & skip whitespaces - new line, tab, space, carriage return
 func (sp *ScanPointer) EatWhitepace() {
 	for sp.currChar == ' ' || sp.currChar == '\n' || sp.currChar == '\t' || sp.currChar == '\r' {
 		sp.ReadNextChar()
 	}
 }
 
-// method to detect & skip comments
+// method to detect & skip comments - single and multi-line
 func (sp *ScanPointer) SkipComments() {
-	multi_comment_count := 0
-
-	if sp.currChar == '/' && sp.PeekNext() == '/' {
-		for sp.currChar != '\n' {
-			sp.ReadNextChar()
-		}
-	} else if sp.currChar == '/' && sp.PeekNext() == '*' {
-		multi_comment_count++
-		sp.ReadNextChar()
-		for multi_comment_count != 0 {
-			if sp.currChar == '*' && sp.PeekNext() == '/' {
-				multi_comment_count--
+	for {
+		if sp.currChar == '/' {
+			switch sp.PeekNext() {
+			case '/': // Single-line comment
+				sp.ReadNextChar() // Consume '/'
+				for sp.currChar != '\n' {
+					sp.ReadNextChar()
+				}
+				sp.ReadNextChar() // Move pointer to next line
+			case '*': // Multi-line comment
+				sp.ReadNextChar() // Consume '*'
+				for multiCommentDepth := 1; multiCommentDepth > 0; {
+					switch sp.PeekNext() {
+					case '*':
+						sp.ReadNextChar() // Consume '*'
+						if sp.PeekNext() == '/' {
+							sp.ReadNextChar() // Consume '/'
+							multiCommentDepth--
+						}
+					case '/':
+						sp.ReadNextChar() // Consume '/'
+						if sp.PeekNext() == '*' {
+							sp.ReadNextChar() // Consume '*'
+							multiCommentDepth++
+						}
+					default:
+						sp.ReadNextChar()
+					}
+				}
+			default:
 				sp.ReadNextChar()
-				sp.ReadNextChar()
-			} else if sp.currChar == '/' && sp.PeekNext() == '*' {
-				multi_comment_count++
-				sp.ReadNextChar()
-				sp.ReadNextChar()
-			} else {
-				sp.ReadNextChar()
+				return // Not a comment, return
 			}
+		} else {
+			sp.ReadNextChar()
+			return // Not a comment, return
 		}
 	}
 }
