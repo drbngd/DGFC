@@ -8,8 +8,11 @@ import (
 )
 
 func TestNextToken2(t *testing.T) {
-	input := `//hI
-	//hello
+	input := `    
+	/*ok
+    /*ok2/*ok3*/
+    */
+    */
     `
 
 	tests := []struct {

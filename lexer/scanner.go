@@ -16,6 +16,7 @@ type ScanPointer struct {
 // function to create a new ScanPointer
 func New(input string) *ScanPointer {
 	// first convert the input string to lower case
+	// TODO - add row and col for the current position
 	input = strings.ToLower(input)
 	sp := &ScanPointer{input: input}
 	sp.ReadNextChar()
@@ -116,7 +117,7 @@ func (sp *ScanPointer) NextToken() token.Token {
 		} else {
 			sp.ReadNextChar()
 			temp_val := sp.ReadString()
-			sp.ReadNextChar()
+			//sp.ReadNextChar()
 			tk = NewToken(token.STRING, "\""+temp_val+"\"")
 		}
 	case 0:
@@ -211,40 +212,33 @@ func (sp *ScanPointer) EatWhitepace() {
 // method to detect & skip comments - single and multi-line
 func (sp *ScanPointer) SkipComments() {
 	for {
+		sp.EatWhitepace()
 		if sp.currChar == '/' {
-			switch sp.PeekNext() {
-			case '/': // Single-line comment
+			if sp.PeekNext() == '/' { // Single-line comment
 				sp.ReadNextChar() // Consume '/'
-				for sp.currChar != '\n' {
+				for sp.PeekNext() != '\n' && sp.PeekNext() != 0 {
 					sp.ReadNextChar()
 				}
 				sp.ReadNextChar() // Move pointer to next line
-			case '*': // Multi-line comment
+			} else if sp.PeekNext() == '*' { // Multi-line comment
 				sp.ReadNextChar() // Consume '*'
-				for multiCommentDepth := 1; multiCommentDepth > 0; {
-					switch sp.PeekNext() {
-					case '*':
-						sp.ReadNextChar() // Consume '*'
-						if sp.PeekNext() == '/' {
-							sp.ReadNextChar() // Consume '/'
-							multiCommentDepth--
-						}
-					case '/':
+				multiCommentDepth := 1
+				for multiCommentDepth > 0 {
+					sp.ReadNextChar()
+					if sp.currChar == '*' && sp.PeekNext() == '/' {
 						sp.ReadNextChar() // Consume '/'
-						if sp.PeekNext() == '*' {
-							sp.ReadNextChar() // Consume '*'
-							multiCommentDepth++
-						}
-					default:
-						sp.ReadNextChar()
+						multiCommentDepth--
+					} else if sp.currChar == '/' && sp.PeekNext() == '*' {
+						sp.ReadNextChar() // Consume '*'
+						multiCommentDepth++
 					}
 				}
-			default:
+				sp.ReadNextChar() // Move pointer to next line
+			} else {
 				sp.ReadNextChar()
 				return // Not a comment, return
 			}
 		} else {
-			sp.ReadNextChar()
 			return // Not a comment, return
 		}
 	}
