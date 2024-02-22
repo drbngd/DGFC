@@ -21,7 +21,7 @@ func (p *Program) Position() (line, col int) {}
 
 // program header node
 type ProgramHeader struct {
-	Name string
+	Name *Identifier
 }
 
 func (ph *ProgramHeader) Type() string              {}
@@ -59,8 +59,8 @@ func (pd *ProcedureDeclaration) Position() (line, col int) {}
 
 // procedure header node
 type ProcedureHeader struct {
-	Name          string
-	ReturnType    string
+	Name          *Identifier
+	ReturnType    *TypeMark
 	ParameterList []*VariableDeclaration
 }
 
@@ -73,16 +73,33 @@ func (ph *ProcedureHeader) Position() (line, col int) {}
 // TODO - should this be fine to implement a list as well
 // TODO - might need to remove left recursion
 type VariableDeclaration struct {
-	Name      string
-	DataType  string // given grammar calls it Type_Mark
+	Name      *Identifier
+	DataType  *TypeMark // given grammar calls it Type_Mark
 	Array     bool
-	ArraySize int
+	ArraySize *Bound // in the grammar it is bound
 }
 
 func (vd *VariableDeclaration) Type() string              {}
 func (vd *VariableDeclaration) Value() string             {}
 func (vd *VariableDeclaration) Children() []Node          {}
 func (vd *VariableDeclaration) Position() (line, col int) {}
+
+// type mark node
+type TypeMark struct {
+	Name      *Identifier
+	IfInteger bool
+	IfFloat   bool
+	IfString  bool
+	IfBoolean bool
+}
+
+func (tm *TypeMark) Type() string              {}
+func (tm *TypeMark) Value() string             {}
+func (tm *TypeMark) Children() []Node          {}
+func (tm *TypeMark) Position() (line, col int) {}
+
+// bound node
+type Bound Number
 
 // procedure body node
 type ProcedureBody struct {
@@ -96,8 +113,26 @@ func (pb *ProcedureBody) Children() []Node          {}
 func (pb *ProcedureBody) Position() (line, col int) {}
 
 // procedure call statement node
-// TODO - will probably require elimination of left recursion
-type ProcedureCallStatement struct{}
+type ProcedureCallStatement struct {
+	Name         *Identifier
+	ArgumentList []*ArgumentList
+}
+
+func (pcs *ProcedureCallStatement) Type() string              {}
+func (pcs *ProcedureCallStatement) Value() string             {}
+func (pcs *ProcedureCallStatement) Children() []Node          {}
+func (pcs *ProcedureCallStatement) Position() (line, col int) {}
+
+// argument list node
+type ArgumentList struct {
+	ExpressionList       []*Expression
+	IfMultipleExpression bool
+}
+
+func (al *ArgumentList) Type() string              {}
+func (al *ArgumentList) Value() string             {}
+func (al *ArgumentList) Children() []Node          {}
+func (al *ArgumentList) Position() (line, col int) {}
 
 // statement interface
 type Statement interface {
@@ -118,7 +153,7 @@ func (as *AssignmentStatement) Position() (line, col int) {}
 
 // destination node
 type Destination struct {
-	Name  string
+	Name  *Identifier
 	Array bool
 	Index *Expression
 }
@@ -166,4 +201,117 @@ func (rs *ReturnStatement) Position() (line, col int) {}
 
 // expression interface
 // TODO - eliminate left recursion
-type Expression interface{}
+type Expression struct {
+	IfPrecedingAND    bool
+	IfPrecedingOR     bool
+	IfPrecedingCOMMA  bool
+	ArithmeticOperand *ArithmeticOperand
+	ExpressionList    []*Expression
+}
+
+func (e *Expression) Type() string              {}
+func (e *Expression) Value() string             {}
+func (e *Expression) Children() []Node          {}
+func (e *Expression) Position() (line, col int) {}
+
+// arithmetic operand node
+type ArithmeticOperand struct {
+	IfPrecedingNOT bool
+	Relation       *Relation
+	OperandList    []*ArithmeticOperand
+}
+
+func (ao *ArithmeticOperand) Type() string              {}
+func (ao *ArithmeticOperand) Value() string             {}
+func (ao *ArithmeticOperand) Children() []Node          {}
+func (ao *ArithmeticOperand) Position() (line, col int) {}
+
+// relation node
+type Relation struct {
+	FirstTerm         *Term
+	FollowingTermList []*Term
+}
+
+func (r *Relation) Type() string              {}
+func (r *Relation) Value() string             {}
+func (r *Relation) Children() []Node          {}
+func (r *Relation) Position() (line, col int) {}
+
+// term node
+
+type Term struct {
+	IfPrecedingLT       bool
+	IfPrecedingGT       bool
+	IfPrecedingLTEQ     bool
+	IfPrecedingGTEQ     bool
+	IfPrecedingEQ       bool
+	IfPrecedingNOTEQ    bool
+	FirstFactor         *Factor
+	FollowingFactorList []*Factor
+}
+
+func (t *Term) Type() string              {}
+func (t *Term) Value() string             {}
+func (t *Term) Children() []Node          {}
+func (t *Term) Position() (line, col int) {}
+
+// factor node
+type Factor struct {
+	IfPrecedingMULTIPLY bool
+	IfPrecedingDIVIDE   bool
+	Expression          *Expression
+	ProcedureCall       *ProcedureCallStatement
+	IfUnaryMinus        bool
+	Name                *Name
+	Number              *Number
+	String              *String
+	IfTrue              bool
+	IfFalse             bool
+}
+
+func (f *Factor) Type() string              {}
+func (f *Factor) Value() string             {}
+func (f *Factor) Children() []Node          {}
+func (f *Factor) Position() (line, col int) {}
+
+// name node
+type Name struct {
+	IfPrecedingUnaryMINUS bool
+	Identifier            *Identifier
+	IfArray               bool
+	Expression            *Expression
+}
+
+func (n *Name) Type() string              {}
+func (n *Name) Value() string             {}
+func (n *Name) Children() []Node          {}
+func (n *Name) Position() (line, col int) {}
+
+// identifier node
+type Identifier struct {
+	Name                   string
+	IfStartsWithUNDERSCORE bool
+}
+
+func (i *Identifier) Type() string              {}
+func (i *Identifier) Value() string             {}
+func (i *Identifier) Children() []Node          {}
+func (i *Identifier) Position() (line, col int) {}
+
+// number node
+type Number struct {
+	Content                string
+	IfStartsWithUNDERSCORE bool
+	IfContainsPERIOD       bool
+}
+
+func (n *Number) Type() string              {}
+func (n *Number) Value() string             {}
+func (n *Number) Children() []Node          {}
+func (n *Number) Position() (line, col int) {}
+
+// string node
+type String struct {
+	Content               string
+	IfContainsDoubleQuote bool
+}
