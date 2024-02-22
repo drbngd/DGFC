@@ -315,3 +315,8 @@ type String struct {
 	Content               string
 	IfContainsDoubleQuote bool
 }
+
+func (s *String) Type() string              {}
+func (s *String) Value() string             {}
+func (s *String) Children() []Node          {}
+func (s *String) Position() (line, col int) {}
