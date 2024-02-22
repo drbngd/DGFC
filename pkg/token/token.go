@@ -85,7 +85,7 @@ const (
 )
 
 // a hash map of keywords (symbol table)
-var symbolTb = map[string]TokenType{
+var keywordsTB = map[string]TokenType{
 	"program":   PROGRAM,
 	"is":        IS,
 	"begin":     BEGIN,
@@ -109,7 +109,7 @@ var symbolTb = map[string]TokenType{
 
 // function to check if a string belongs to the keyword hash map
 func LookUp(tokenVal string) TokenType {
-	tk, ok := symbolTb[tokenVal]
+	tk, ok := keywordsTB[tokenVal]
 	if ok {
 		return tk
 	}
