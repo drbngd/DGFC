@@ -16,3 +16,5 @@ func main() {
 	fmt.Printf("Hey %s! This is the REPL to test the compiler.\n", user.Username)
 	repl.Start(os.Stdin, os.Stdout)
 }
+
+// test to see if .idea is being ignored
