@@ -23,7 +23,7 @@ const (
 	// Identifiers + literals
 	IDENTIFIER = "IDENTIFIER"
 	NUMBER     = "NUMBER"
-	STRING     = "STRING"
+	STRING     = "STRING VALUE"
 
 	// Operators
 	ASSIGN = ":="

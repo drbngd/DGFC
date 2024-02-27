@@ -16,11 +16,11 @@ func (p *Program) ToString() string {
 }
 
 type ProgramHeader struct {
-	Name *Identifier
+	Identifier *Identifier
 }
 
 func (ph *ProgramHeader) NodeType() string { return "ProgramHeader" }
-func (ph *ProgramHeader) ToString() string { return "program " + ph.Name.ToString() + "is" }
+func (ph *ProgramHeader) ToString() string { return "program " + ph.Identifier.ToString() + "is" }
 
 type ProgramBody struct {
 	Declarations *[]Declaration
@@ -64,14 +64,14 @@ func (pd *ProcedureDeclaration) ToString() string {
 }
 
 type ProcedureHeader struct {
-	Name       *Identifier
+	Identifier *Identifier
 	Type       *TypeMark
 	Parameters *ParameterList
 }
 
 func (ph *ProcedureHeader) NodeType() string { return "ProcedureHeader" }
 func (ph *ProcedureHeader) ToString() string {
-	returnString := "procedure " + ph.Name.ToString() + " : " + ph.Type.ToString() + " ("
+	returnString := "procedure " + ph.Identifier.ToString() + " : " + ph.Type.ToString() + " ("
 	if ph.Parameters != nil {
 		returnString += ph.Parameters.ToString()
 	}
@@ -121,11 +121,11 @@ func (pb *ProcedureBody) ToString() string {
 }
 
 type VariableDeclaration struct {
-	IsGlobal bool
-	IsArray  bool
-	Name     *Identifier
-	Type     *TypeMark
-	Bound    *Bound
+	IsGlobal   bool
+	IsArray    bool
+	Identifier *Identifier
+	Type       *TypeMark
+	Bound      *Bound
 }
 
 func (vd *VariableDeclaration) declarationNode() {}
@@ -135,7 +135,7 @@ func (vd *VariableDeclaration) ToString() string {
 	if vd.IsGlobal {
 		returnString += "global "
 	}
-	returnString += "variable " + vd.Name.ToString() + " : " + vd.Type.ToString()
+	returnString += "variable " + vd.Identifier.ToString() + " : " + vd.Type.ToString()
 	if vd.IsArray {
 		returnString += "[" + vd.Bound.ToString() + "]"
 	}
@@ -422,7 +422,7 @@ type Name struct {
 	Index   *Expression
 }
 
-func (n *Name) NodeType() string { return "Name" }
+func (n *Name) NodeType() string { return "Identifier" }
 func (n *Name) ToString() string {
 	if n.IsArray {
 		return n.Name.ToString() + " " + "[" + n.Index.ToString() + "]"
