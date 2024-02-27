@@ -1,213 +1,459 @@
 package ast
 
-// fundamental node interface
 type Node interface {
-	Type() string
-	Value() string
-	Children() []Node
-	Position() (line, col int)
+	NodeType() string
+	ToString() string
 }
 
-// program node
 type Program struct {
 	Header *ProgramHeader
 	Body   *ProgramBody
 }
 
-//func (p *Program) Children() []Node          {}
-//func (p *Program) Position() (line, col int) {} nn
+func (p *Program) NodeType() string { return "Program" }
+func (p *Program) ToString() string {
+	return p.Header.ToString() + "\n" + p.Body.ToString() + "."
+}
 
-// program header node
 type ProgramHeader struct {
 	Name *Identifier
 }
 
-// program body node
+func (ph *ProgramHeader) NodeType() string { return "ProgramHeader" }
+func (ph *ProgramHeader) ToString() string { return "program " + ph.Name.ToString() + "is" }
+
 type ProgramBody struct {
-	Declaration []Declaration // TODO - a little iffy on this
-	Statement   []Statement   // TODO - a little iffy on this as well
+	Declarations *[]Declaration
+	Statements   *[]Statement
 }
 
-// declaration interface -  as there are two types of declarations
+func (pb *ProgramBody) NodeType() string { return "ProgramBody" }
+func (pb *ProgramBody) ToString() string {
+	returnString := ""
+	for _, d := range *pb.Declarations {
+		returnString += d.ToString() + "\n"
+	}
+	returnString += "begin\n"
+	for _, s := range *pb.Statements {
+		returnString += s.ToString() + "\n"
+	}
+	returnString += "end program"
+	return returnString
+}
+
 type Declaration interface {
-	Type() string
 	Node
+	declarationNode()
 }
 
-// procedure declaration node
 type ProcedureDeclaration struct {
-	Header *ProcedureHeader
-	Body   *ProcedureBody
+	IsGlobal bool
+	Header   *ProcedureHeader
+	Body     *ProcedureBody
 }
 
-// procedure header node
+func (pd *ProcedureDeclaration) declarationNode() {}
+func (pd *ProcedureDeclaration) NodeType() string { return "ProcedureDeclaration" }
+func (pd *ProcedureDeclaration) ToString() string {
+	returnString := ""
+	if pd.IsGlobal {
+		returnString += "global "
+	}
+	returnString += pd.Header.ToString() + "\n" + pd.Body.ToString()
+	return returnString
+}
+
 type ProcedureHeader struct {
-	Name          *Identifier
-	ReturnType    *TypeMark
-	ParameterList []*VariableDeclaration
+	Name       *Identifier
+	Type       *TypeMark
+	Parameters *ParameterList
 }
 
-// parameter list <=> parameter <=> variable declaration node
-// TODO - should this be fine to implement a list as well
-// TODO - might need to remove left recursion
-type VariableDeclaration struct {
-	Name      *Identifier
-	DataType  *TypeMark // given grammar calls it Type_Mark
-	Array     bool
-	ArraySize *Bound // in the grammar it is bound
+func (ph *ProcedureHeader) NodeType() string { return "ProcedureHeader" }
+func (ph *ProcedureHeader) ToString() string {
+	returnString := "procedure " + ph.Name.ToString() + " : " + ph.Type.ToString() + " ("
+	if ph.Parameters != nil {
+		returnString += ph.Parameters.ToString()
+	}
+	returnString += ")"
+	return returnString
 }
 
-// type mark node
-type TypeMark struct {
-	Name      *Identifier
-	IfInteger bool
-	IfFloat   bool
-	IfString  bool
-	IfBoolean bool
+type ParameterList struct {
+	Parameters *[]Parameter
 }
 
-// bound node
-type Bound Number
+func (pl *ParameterList) NodeType() string { return "ParameterList" }
+func (pl *ParameterList) ToString() string {
+	returnString := ""
+	for _, p := range *pl.Parameters {
+		returnString += p.ToString() + ", "
+	}
+	return returnString
+}
 
-// procedure body node
+type Parameter struct {
+	VariableDeclaration *VariableDeclaration
+}
+
+func (p *Parameter) NodeType() string { return "Parameter" }
+func (p *Parameter) ToString() string {
+	return p.VariableDeclaration.ToString()
+}
+
 type ProcedureBody struct {
-	Declaration []Declaration // TODO - a little iffy on this
-	Statement   []Statement   // TODO - a little iffy on this as well
+	Declarations *[]Declaration
+	Statements   *[]Statement
 }
 
-// procedure call statement node
-type ProcedureCallStatement struct {
-	Name         *Identifier
-	ArgumentList []*ArgumentList
+func (pb *ProcedureBody) NodeType() string { return "ProcedureBody" }
+func (pb *ProcedureBody) ToString() string {
+	returnString := ""
+	for _, d := range *pb.Declarations {
+		returnString += d.ToString() + "\n"
+	}
+	returnString += "begin\n"
+	for _, s := range *pb.Statements {
+		returnString += s.ToString() + "\n"
+	}
+	returnString += "end procedure"
+	return returnString
 }
 
-// argument list node
-type ArgumentList struct {
-	ExpressionList       []*Expression
-	IfMultipleExpression bool
+type VariableDeclaration struct {
+	IsGlobal bool
+	IsArray  bool
+	Name     *Identifier
+	Type     *TypeMark
+	Bound    *Bound
 }
 
-// statement interface
+func (vd *VariableDeclaration) declarationNode() {}
+func (vd *VariableDeclaration) NodeType() string { return "VariableDeclaration" }
+func (vd *VariableDeclaration) ToString() string {
+	returnString := ""
+	if vd.IsGlobal {
+		returnString += "global "
+	}
+	returnString += "variable " + vd.Name.ToString() + " : " + vd.Type.ToString()
+	if vd.IsArray {
+		returnString += "[" + vd.Bound.ToString() + "]"
+	}
+	return returnString
+}
+
+type TypeMark struct {
+	Name string
+}
+
+func (tm *TypeMark) NodeType() string { return "TypeMark" }
+func (tm *TypeMark) ToString() string { return tm.Name }
+
+type Bound struct {
+	Value *Number
+}
+
+func (b *Bound) NodeType() string { return "Bound" }
+func (b *Bound) ToString() string { return b.Value.ToString() }
+
+type ProcedureCall struct {
+	ProcedureName *Identifier
+	ArguementList *ArguementList
+}
+
+func (pc *ProcedureCall) NodeType() string { return "ProcedureCall" }
+func (pc *ProcedureCall) ToString() string {
+	return pc.ProcedureName.ToString() + " (" + pc.ArguementList.ToString() + ")"
+}
+
 type Statement interface {
-	Type() string
 	Node
+	statementNode()
 }
 
-// assignment statement node
 type AssignmentStatement struct {
 	Destination *Destination
-	Source      *Expression // TODO - a little iffy on this
+	Expression  *Expression
 }
 
-// destination node
+func (as *AssignmentStatement) statementNode()   {}
+func (as *AssignmentStatement) NodeType() string { return "AssignmentStatement" }
+func (as *AssignmentStatement) ToString() string {
+	return as.Destination.ToString() + " := " + as.Expression.ToString()
+}
+
 type Destination struct {
-	Name  *Identifier
-	Array bool
-	Index *Expression
+	IsArray      bool
+	VariableName *Identifier
+	Index        *Expression
 }
 
-// if statement node
+func (ds *Destination) NodeType() string { return "Destination" }
+func (ds *Destination) ToString() string {
+	if ds.IsArray {
+		return ds.VariableName.ToString() + " " + "[" + ds.Index.ToString() + "]"
+	}
+	return ds.VariableName.ToString()
+}
+
 type IfStatement struct {
-	IfExpression *Expression
-	ThenBody     []Statement // since there is a *
-	ElseBody     []Statement // since there is a *
+	Condition *Expression
+	ThenBlock *[]Statement
+	ElseBlock *[]Statement
 }
 
-// loop statement node
+func (is *IfStatement) statementNode()   {}
+func (is *IfStatement) NodeType() string { return "IfStatement" }
+func (is *IfStatement) ToString() string {
+	returnString := "if ( " + is.Condition.ToString() + " ) then\n"
+	for _, s := range *is.ThenBlock {
+		returnString += s.ToString() + "\n"
+	}
+	if is.ElseBlock != nil {
+		returnString += "else\n"
+		for _, s := range *is.ElseBlock {
+			returnString += s.ToString() + "\n"
+		}
+	}
+	return returnString + "end if"
+}
+
 type LoopStatement struct {
 	Initialization *AssignmentStatement
 	Condition      *Expression
-	Body           []Statement
+	Body           *[]Statement
 }
 
-// return statement node
+func (ls *LoopStatement) getStatementToString() string { return ls.ToString() }
+func (ls *LoopStatement) NodeType() string             { return "LoopStatement" }
+func (ls *LoopStatement) ToString() string {
+	returnString := "for ("
+	if ls.Initialization != nil {
+		returnString += ls.Initialization.ToString() + " ;"
+	} else {
+		returnString += " ;"
+	}
+
+	if ls.Condition != nil {
+		returnString += ls.Condition.ToString() + " )"
+	} else {
+		returnString += " )"
+	}
+
+	for _, s := range *ls.Body {
+		returnString += s.ToString() + "\n"
+	}
+	return returnString + "end for"
+}
+
 type ReturnStatement struct {
-	ReturnValue *Expression
+	Expression *Expression
 }
 
-// identifier node TODO - do I need this?
+func (rs *ReturnStatement) getStatementToString() string { return rs.ToString() }
+func (rs *ReturnStatement) NodeType() string             { return "ReturnStatement" }
+func (rs *ReturnStatement) ToString() string {
+	if rs.Expression != nil {
+		return "return " + rs.Expression.ToString()
+	}
+	return "return"
+}
 
-// expression interface
-// TODO - eliminate left recursion
+type Identifier struct {
+	Name string // implement rules for valid identifier names
+}
+
+func (i *Identifier) NodeType() string { return "Identifier" }
+func (i *Identifier) ToString() string { return i.Name }
+
 type Expression struct {
-	IfPrecedingAND    bool
-	IfPrecedingOR     bool
-	IfPrecedingCOMMA  bool
-	ArithmeticOperand *ArithmeticOperand
-	ExpressionList    []*Expression
+	HasNotOperator bool
+	ArithOp        *ArithOp
+	AndOrList      *[]AndOrExpression
 }
 
-// arithmetic operand node
-type ArithmeticOperand struct {
-	IfPrecedingNOT bool
-	Relation       *Relation
-	OperandList    []*ArithmeticOperand
+func (e *Expression) NodeType() string { return "Expression" }
+func (e *Expression) ToString() string {
+	returnString := ""
+	if e.HasNotOperator {
+		returnString += "not "
+	}
+	if e.ArithOp != nil {
+		returnString += e.ArithOp.ToString()
+	}
+	if e.AndOrList != nil {
+		for _, aoe := range *e.AndOrList {
+			returnString += " " + aoe.ToString()
+		}
+	}
+	return returnString
 }
 
-// relation node
+type AndOrExpression struct {
+	Operator   string
+	Expression *Expression
+}
+
+func (ae *AndOrExpression) NodeType() string { return "AndOrExpression" }
+func (ae *AndOrExpression) ToString() string {
+	return ae.Operator + " " + ae.Expression.ToString()
+}
+
+type ArithOp struct {
+	Relation   *Relation
+	AddSubList *[]AddSubExpression
+}
+
+func (ao *ArithOp) NodeType() string { return "ArithmeticOperation" }
+func (ao *ArithOp) ToString() string {
+	returnString := ao.Relation.ToString()
+	if ao.AddSubList != nil {
+		for _, ase := range *ao.AddSubList {
+			returnString += " " + ase.ToString()
+		}
+	}
+	return returnString
+}
+
+type AddSubExpression struct {
+	Operator           string
+	ArithmeticOperator *ArithOp
+}
+
+func (ae *AddSubExpression) NodeType() string { return "AddSubExpression" }
+func (ae *AddSubExpression) ToString() string {
+	return ae.Operator + " " + ae.ArithmeticOperator.ToString()
+}
+
 type Relation struct {
-	FirstTerm         *Term
-	FollowingTermList []*Term
+	Term                   *Term
+	RelationalOperatorList *[]RelationalOperatorExpression
 }
 
-// term node
+func (r *Relation) NodeType() string { return "Relation" }
+func (r *Relation) ToString() string {
+	returnString := r.Term.ToString()
+	if r.RelationalOperatorList != nil {
+		for _, roe := range *r.RelationalOperatorList {
+			returnString += " " + roe.ToString()
+		}
+	}
+	return returnString
+}
+
+type RelationalOperatorExpression struct {
+	Operator string
+	Relation *Relation
+}
+
+func (roe *RelationalOperatorExpression) NodeType() string { return "RelationalOperatorExpression" }
+func (roe *RelationalOperatorExpression) ToString() string {
+	return roe.Operator + " " + roe.Relation.ToString()
+}
 
 type Term struct {
-	IfPrecedingLT       bool
-	IfPrecedingGT       bool
-	IfPrecedingLTEQ     bool
-	IfPrecedingGTEQ     bool
-	IfPrecedingEQ       bool
-	IfPrecedingNOTEQ    bool
-	FirstFactor         *Factor
-	FollowingFactorList []*Factor
+	Factor      *Factor
+	MultDivList *[]MultDivExpression
 }
 
-// factor node
-type Factor struct {
-	IfPrecedingMULTIPLY bool
-	IfPrecedingDIVIDE   bool
-	Expression          *Expression
-	ProcedureCall       *ProcedureCallStatement
-	IfUnaryMinus        bool
-	Name                *Name
-	Number              *Number
-	String              *String
-	IfTrue              bool
-	IfFalse             bool
-}
-
-// name node
-type Name struct {
-	IfPrecedingUnaryMINUS bool
-	Identifier            *Identifier
-	IfArray               bool
-	Expression            *Expression
-}
-
-// identifier node
-type Identifier struct {
-	Content              string
-	StartsWithUNDERSCORE bool
-}
-
-// number node
-type Number struct {
-	Content              string
-	StartsWithUNDERSCORE bool
-	ContainsPERIOD       bool
-}
-
-func (n *Number) Type() string {
-	if n.ContainsPERIOD {
-		return "float"
-	} else {
-		return "integer"
+func (t *Term) NodeType() string { return "Term" }
+func (t *Term) ToString() string {
+	returnString := t.Factor.ToString()
+	if t.MultDivList != nil {
+		for _, mde := range *t.MultDivList {
+			returnString += " " + mde.ToString()
+		}
 	}
+	return returnString
 }
 
-// string node
-type String struct {
-	Content               string
-	IfContainsDoubleQuote bool
+type MultDivExpression struct {
+	Operator string
+	Factor   *Factor
 }
+
+func (mde *MultDivExpression) NodeType() string { return "MultDivExpression" }
+func (mde *MultDivExpression) ToString() string {
+	return mde.Operator + " " + mde.Factor.ToString()
+}
+
+type Factor struct {
+	IsExpression    bool
+	IsProcedureCall bool
+	IsName          bool
+	IsNumber        bool
+	IsString        bool
+	IsBool          bool
+
+	Expression    *Expression
+	ProcedureCall *ProcedureCall
+	Name          *Name
+	Number        *Number
+	String        *String
+	BoolValue     string
+}
+
+func (f *Factor) NodeType() string { return "Factor" }
+func (f *Factor) ToString() string {
+	if f.IsExpression {
+		return f.Expression.ToString()
+	}
+	if f.IsProcedureCall {
+		return f.ProcedureCall.ToString()
+	}
+	if f.IsName {
+		return f.Name.ToString()
+	}
+	if f.IsNumber {
+		return f.Number.ToString()
+	}
+	if f.IsString {
+		return f.String.ToString()
+	}
+	if f.IsBool {
+		return f.BoolValue
+	}
+	return ""
+}
+
+type Name struct {
+	IsArray bool
+	Name    *Identifier
+	Index   *Expression
+}
+
+func (n *Name) NodeType() string { return "Name" }
+func (n *Name) ToString() string {
+	if n.IsArray {
+		return n.Name.ToString() + " " + "[" + n.Index.ToString() + "]"
+	}
+	return n.Name.ToString()
+
+}
+
+type ArguementList struct {
+	Arguements *[]Expression
+}
+
+func (al *ArguementList) NodeType() string { return "ArguementList" }
+func (al *ArguementList) ToString() string {
+	returnString := ""
+	for _, a := range *al.Arguements {
+		returnString += a.ToString() + ", "
+	}
+	return returnString
+}
+
+type Number struct {
+	Value string // implement rules for valid number values
+}
+
+func (n *Number) NodeType() string { return "Number" }
+func (n *Number) ToString() string { return n.Value }
+
+type String struct {
+	Value string // implement rules for valid string values
+}
+
+func (s *String) NodeType() string { return "String" }
+func (s *String) ToString() string { return s.Value }
