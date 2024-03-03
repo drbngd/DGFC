@@ -128,9 +128,9 @@ func (pp *ParserPointer) ParseProcedureHeader() *ast.ProcedureHeader {
 					if pp.CurrentTokenIs(token.LPAREN) {
 						// TODO - add something which would be fine with no parameters
 						parameterList := ast.ParameterList{}
-						for !pp.CurrentTokenIs(token.RPAREN) {
+						for !pp.CurrentTokenIs(token.RPAREN) { // TODO - check if logic works correctly
 							parameter := pp.ParseParameter()
-							*parameterList.Parameters = append(*parameterList.Parameters, parameter)
+							*parameterList.Parameters = append(*parameterList.Parameters, *parameter)
 						}
 						procedureHeader.Parameters = &parameterList
 						pp.NextToken()
