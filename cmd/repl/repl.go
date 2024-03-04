@@ -2,7 +2,7 @@ package repl
 
 import (
 	"DGFC/pkg/lexer"
-	"DGFC/pkg/token"
+	"DGFC/pkg/parser"
 	"bufio"
 	"fmt"
 	"io"
@@ -21,11 +21,31 @@ func Start(in io.Reader, out io.Writer) {
 		}
 
 		line := scanner.Text()
-		scan_line := lexer.New(line)
+		scanLine := lexer.New(line)
+		parsePointer := parser.New(scanLine)
 
-		for tk := scan_line.NextToken(); tk.Type != token.EOF; tk = scan_line.NextToken() {
-			fmt.Printf("%+v\n", tk)
+		program := parsePointer.ParseProgram()
+
+		if len(parsePointer.GetErrors()) != 0 {
+			printParserErrors(out, parsePointer.GetErrors())
+			continue
 		}
 
+		io.WriteString(out, program.ToString())
+		io.WriteString(out, "\n")
+
+		// for lexer testing
+		//for tk := scanLine.NextToken(); tk.Type != token.EOF; tk = scanLine.NextToken() {
+		//	fmt.Printf("%+v\n", tk)
+		//}
+
+	}
+}
+
+func printParserErrors(out io.Writer, errors []string) {
+	io.WriteString(out, "Woops! We ran into some monkey business here!\n")
+	io.WriteString(out, " parser errors:\n")
+	for _, msg := range errors {
+		io.WriteString(out, "\t"+msg+"\n")
 	}
 }

@@ -64,16 +64,16 @@ func (pd *ProcedureDeclaration) ToString() string {
 }
 
 type ProcedureHeader struct {
-	Identifier *Identifier
-	Type       *TypeMark
-	Parameters *ParameterList
+	Identifier    *Identifier
+	Type          *TypeMark
+	ParameterList *ParameterList
 }
 
 func (ph *ProcedureHeader) NodeType() string { return "ProcedureHeader" }
 func (ph *ProcedureHeader) ToString() string {
 	returnString := "procedure " + ph.Identifier.ToString() + " : " + ph.Type.ToString() + " ("
-	if ph.Parameters != nil {
-		returnString += ph.Parameters.ToString()
+	if ph.ParameterList != nil {
+		returnString += ph.ParameterList.ToString()
 	}
 	returnString += ")"
 	return returnString
@@ -157,13 +157,13 @@ func (b *Bound) NodeType() string { return "Bound" }
 func (b *Bound) ToString() string { return b.Value.ToString() }
 
 type ProcedureCall struct {
-	ProcedureName *Identifier
+	Identifier    *Identifier
 	ArguementList *ArguementList
 }
 
 func (pc *ProcedureCall) NodeType() string { return "ProcedureCall" }
 func (pc *ProcedureCall) ToString() string {
-	return pc.ProcedureName.ToString() + " (" + pc.ArguementList.ToString() + ")"
+	return pc.Identifier.ToString() + " (" + pc.ArguementList.ToString() + ")"
 }
 
 type Statement interface {
@@ -183,17 +183,17 @@ func (as *AssignmentStatement) ToString() string {
 }
 
 type Destination struct {
-	IsArray      bool
-	VariableName *Identifier
-	Index        *Expression
+	IsArray    bool
+	Identifier *Identifier
+	Expression *Expression
 }
 
 func (ds *Destination) NodeType() string { return "Destination" }
 func (ds *Destination) ToString() string {
 	if ds.IsArray {
-		return ds.VariableName.ToString() + " " + "[" + ds.Index.ToString() + "]"
+		return ds.Identifier.ToString() + " " + "[" + ds.Expression.ToString() + "]"
 	}
-	return ds.VariableName.ToString()
+	return ds.Identifier.ToString()
 }
 
 type IfStatement struct {
@@ -224,8 +224,8 @@ type LoopStatement struct {
 	Body           *[]Statement
 }
 
-func (ls *LoopStatement) getStatementToString() string { return ls.ToString() }
-func (ls *LoopStatement) NodeType() string             { return "LoopStatement" }
+func (ls *LoopStatement) statementNode()   {}
+func (ls *LoopStatement) NodeType() string { return "LoopStatement" }
 func (ls *LoopStatement) ToString() string {
 	returnString := "for ("
 	if ls.Initialization != nil {
@@ -250,8 +250,8 @@ type ReturnStatement struct {
 	Expression *Expression
 }
 
-func (rs *ReturnStatement) getStatementToString() string { return rs.ToString() }
-func (rs *ReturnStatement) NodeType() string             { return "ReturnStatement" }
+func (rs *ReturnStatement) statementNode()   {}
+func (rs *ReturnStatement) NodeType() string { return "ReturnStatement" }
 func (rs *ReturnStatement) ToString() string {
 	if rs.Expression != nil {
 		return "return " + rs.Expression.ToString()
@@ -267,15 +267,15 @@ func (i *Identifier) NodeType() string { return "Identifier" }
 func (i *Identifier) ToString() string { return i.Name }
 
 type Expression struct {
-	HasNotOperator bool
-	ArithOp        *ArithOp
-	AndOrList      *[]AndOrExpression
+	IsNot     bool
+	ArithOp   *ArithmeticOperation
+	AndOrList *[]AndOrExpression
 }
 
 func (e *Expression) NodeType() string { return "Expression" }
 func (e *Expression) ToString() string {
 	returnString := ""
-	if e.HasNotOperator {
+	if e.IsNot {
 		returnString += "not "
 	}
 	if e.ArithOp != nil {
@@ -299,13 +299,13 @@ func (ae *AndOrExpression) ToString() string {
 	return ae.Operator + " " + ae.Expression.ToString()
 }
 
-type ArithOp struct {
+type ArithmeticOperation struct {
 	Relation   *Relation
 	AddSubList *[]AddSubExpression
 }
 
-func (ao *ArithOp) NodeType() string { return "ArithmeticOperation" }
-func (ao *ArithOp) ToString() string {
+func (ao *ArithmeticOperation) NodeType() string { return "ArithmeticOperation" }
+func (ao *ArithmeticOperation) ToString() string {
 	returnString := ao.Relation.ToString()
 	if ao.AddSubList != nil {
 		for _, ase := range *ao.AddSubList {
@@ -316,39 +316,39 @@ func (ao *ArithOp) ToString() string {
 }
 
 type AddSubExpression struct {
-	Operator           string
-	ArithmeticOperator *ArithOp
+	Operator            string
+	ArithmeticOperation *ArithmeticOperation
 }
 
 func (ae *AddSubExpression) NodeType() string { return "AddSubExpression" }
 func (ae *AddSubExpression) ToString() string {
-	return ae.Operator + " " + ae.ArithmeticOperator.ToString()
+	return ae.Operator + " " + ae.ArithmeticOperation.ToString()
 }
 
 type Relation struct {
-	Term                   *Term
-	RelationalOperatorList *[]RelationalOperatorExpression
+	Term                    *Term
+	RelationalOperationList *[]RelationalExpression
 }
 
 func (r *Relation) NodeType() string { return "Relation" }
 func (r *Relation) ToString() string {
 	returnString := r.Term.ToString()
-	if r.RelationalOperatorList != nil {
-		for _, roe := range *r.RelationalOperatorList {
+	if r.RelationalOperationList != nil {
+		for _, roe := range *r.RelationalOperationList {
 			returnString += " " + roe.ToString()
 		}
 	}
 	return returnString
 }
 
-type RelationalOperatorExpression struct {
+type RelationalExpression struct {
 	Operator string
-	Relation *Relation
+	Term     *Term
 }
 
-func (roe *RelationalOperatorExpression) NodeType() string { return "RelationalOperatorExpression" }
-func (roe *RelationalOperatorExpression) ToString() string {
-	return roe.Operator + " " + roe.Relation.ToString()
+func (roe *RelationalExpression) NodeType() string { return "RelationalExpression" }
+func (roe *RelationalExpression) ToString() string {
+	return roe.Operator + " " + roe.Term.ToString()
 }
 
 type Term struct {
@@ -380,6 +380,7 @@ func (mde *MultDivExpression) ToString() string {
 type Factor struct {
 	IsExpression    bool
 	IsProcedureCall bool
+	IsNegative      bool
 	IsName          bool
 	IsNumber        bool
 	IsString        bool
@@ -401,33 +402,40 @@ func (f *Factor) ToString() string {
 	if f.IsProcedureCall {
 		return f.ProcedureCall.ToString()
 	}
+
+	prefixStr := ""
+	if f.IsNegative {
+		prefixStr = "-"
+	}
+
 	if f.IsName {
-		return f.Name.ToString()
+		return prefixStr + f.Name.ToString()
 	}
 	if f.IsNumber {
-		return f.Number.ToString()
+		return prefixStr + f.Number.ToString()
 	}
 	if f.IsString {
-		return f.String.ToString()
+		return prefixStr + f.String.ToString()
 	}
 	if f.IsBool {
-		return f.BoolValue
+		return prefixStr + f.BoolValue
 	}
+
 	return ""
 }
 
 type Name struct {
-	IsArray bool
-	Name    *Identifier
-	Index   *Expression
+	IsArray    bool
+	Identifier *Identifier
+	Expression *Expression
 }
 
 func (n *Name) NodeType() string { return "Identifier" }
 func (n *Name) ToString() string {
 	if n.IsArray {
-		return n.Name.ToString() + " " + "[" + n.Index.ToString() + "]"
+		return n.Identifier.ToString() + " " + "[" + n.Expression.ToString() + "]"
 	}
-	return n.Name.ToString()
+	return n.Identifier.ToString()
 
 }
 
