@@ -24,7 +24,7 @@ func (ph *ProgramHeader) ToString() string { return "program " + ph.Identifier.T
 
 type ProgramBody struct {
 	Declarations *[]Declaration
-	Statements   *[]Statement
+	Statements   []Statement
 }
 
 func (pb *ProgramBody) NodeType() string { return "ProgramBody" }
@@ -34,7 +34,7 @@ func (pb *ProgramBody) ToString() string {
 		returnString += d.ToString() + "\n"
 	}
 	returnString += "begin\n"
-	for _, s := range *pb.Statements {
+	for _, s := range pb.Statements {
 		returnString += s.ToString() + "\n"
 	}
 	returnString += "end program"
@@ -103,7 +103,7 @@ func (p *Parameter) ToString() string {
 
 type ProcedureBody struct {
 	Declarations *[]Declaration
-	Statements   *[]Statement
+	Statements   []Statement
 }
 
 func (pb *ProcedureBody) NodeType() string { return "ProcedureBody" }
@@ -113,7 +113,7 @@ func (pb *ProcedureBody) ToString() string {
 		returnString += d.ToString() + "\n"
 	}
 	returnString += "begin\n"
-	for _, s := range *pb.Statements {
+	for _, s := range pb.Statements {
 		returnString += s.ToString() + "\n"
 	}
 	returnString += "end procedure"
@@ -158,7 +158,7 @@ func (b *Bound) ToString() string { return b.Value.ToString() }
 
 type ProcedureCall struct {
 	Identifier    *Identifier
-	ArguementList *ArguementList
+	ArguementList *ArgumentList
 }
 
 func (pc *ProcedureCall) NodeType() string { return "ProcedureCall" }
@@ -198,20 +198,20 @@ func (ds *Destination) ToString() string {
 
 type IfStatement struct {
 	Condition *Expression
-	ThenBlock *[]Statement
-	ElseBlock *[]Statement
+	ThenBlock []Statement
+	ElseBlock []Statement
 }
 
 func (is *IfStatement) statementNode()   {}
 func (is *IfStatement) NodeType() string { return "IfStatement" }
 func (is *IfStatement) ToString() string {
 	returnString := "if ( " + is.Condition.ToString() + " ) then\n"
-	for _, s := range *is.ThenBlock {
+	for _, s := range is.ThenBlock {
 		returnString += s.ToString() + "\n"
 	}
 	if is.ElseBlock != nil {
 		returnString += "else\n"
-		for _, s := range *is.ElseBlock {
+		for _, s := range is.ElseBlock {
 			returnString += s.ToString() + "\n"
 		}
 	}
@@ -221,7 +221,7 @@ func (is *IfStatement) ToString() string {
 type LoopStatement struct {
 	Initialization *AssignmentStatement
 	Condition      *Expression
-	Body           *[]Statement
+	Body           []Statement
 }
 
 func (ls *LoopStatement) statementNode()   {}
@@ -240,7 +240,7 @@ func (ls *LoopStatement) ToString() string {
 		returnString += " )"
 	}
 
-	for _, s := range *ls.Body {
+	for _, s := range ls.Body {
 		returnString += s.ToString() + "\n"
 	}
 	return returnString + "end for"
@@ -439,14 +439,14 @@ func (n *Name) ToString() string {
 
 }
 
-type ArguementList struct {
-	Arguements *[]Expression
+type ArgumentList struct {
+	Arguments *[]Expression
 }
 
-func (al *ArguementList) NodeType() string { return "ArguementList" }
-func (al *ArguementList) ToString() string {
+func (al *ArgumentList) NodeType() string { return "ArgumentList" }
+func (al *ArgumentList) ToString() string {
 	returnString := ""
-	for _, a := range *al.Arguements {
+	for _, a := range *al.Arguments {
 		returnString += a.ToString() + ", "
 	}
 	return returnString

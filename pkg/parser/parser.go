@@ -15,18 +15,24 @@ type ParserPointer struct {
 }
 
 func New(sp *lexer.ScanPointer) *ParserPointer {
-	pp := &ParserPointer{sp: sp}
+	pp := &ParserPointer{sp: sp, errors: []string{}}
 
 	// Read two tokens, so currentToken and peekToken are both set
-	//pp.NextToken()
+	pp.NextToken()
 	pp.NextToken() // only once to make sure PROGRAM is the first token
-
+	//fmt.Printf("Current Token is: %+v\n", pp.currentToken.Value)
 	return pp
+}
+
+// for testing
+func (pp *ParserPointer) GetCurrentToken() token.Token {
+	return pp.currentToken
 }
 
 func (pp *ParserPointer) NextToken() {
 	pp.currentToken = pp.peekToken
 	pp.peekToken = pp.sp.NextToken()
+	fmt.Printf("Current Token is: %+v\n", pp.currentToken.Value)
 }
 
 func (pp *ParserPointer) CurrentTokenIs(t token.TokenType) bool {
@@ -39,7 +45,8 @@ func (pp *ParserPointer) NextTokenIs(t token.TokenType) bool {
 
 func (pp *ParserPointer) ReportError(msg string) {
 	line, col := pp.sp.GetPosition()
-	errorMessage := fmt.Sprintf("Error at line %d, column %d: %s", line, col, msg)
+	errorMessage := fmt.Sprintf("Error at line %d, column %d: %s. Received token: %s", line, col, msg, pp.currentToken.Value)
+
 	pp.errors = append(pp.errors, errorMessage)
 }
 
@@ -48,7 +55,7 @@ func (pp *ParserPointer) GetErrors() []string {
 }
 
 /*---Parse Functions for Individual Grammar Rules---*/
-// convetion followed: each parse function ends with a NextToken() call or a return statement
+// convention followed: each parse function ends with a NextToken() call or a return statement
 // exception: ParseStatements() function, which is called by multiple grammar rules
 
 func (pp *ParserPointer) ParseProgram() *ast.Program {
@@ -66,7 +73,7 @@ func (pp *ParserPointer) ParseProgram() *ast.Program {
 }
 
 func (pp *ParserPointer) ParseProgramHeader() *ast.ProgramHeader {
-	programHeader := &ast.ProgramHeader{}
+	programHeader := &ast.ProgramHeader{Identifier: &ast.Identifier{}}
 
 	if !pp.CurrentTokenIs(token.PROGRAM) {
 		pp.ReportError("[Program Header] expected PROGRAM keyword")
@@ -78,6 +85,9 @@ func (pp *ParserPointer) ParseProgramHeader() *ast.ProgramHeader {
 		pp.ReportError("[Program Header] expected IDENTIFIER after PROGRAM keyword")
 		return nil
 	}
+
+	fmt.Printf("Current Token is: %+v\n", pp.currentToken.Value)
+
 	programHeader.Identifier.Name = pp.currentToken.Value
 	pp.NextToken()
 
@@ -98,6 +108,14 @@ func (pp *ParserPointer) ParseProgramBody() *ast.ProgramBody {
 	programBody := &ast.ProgramBody{}
 	programBody.Declarations = pp.ParseDeclarations() // TODO: make all var/proc declarations global
 	programBody.Statements = pp.ParseStatements()
+
+	if !(pp.CurrentTokenIs(token.END) && pp.NextTokenIs(token.PROGRAM)) {
+		pp.ReportError("[Program Body] expected END PROGRAM after declarations and statements")
+		return nil
+	}
+
+	pp.NextToken() // consume the END token
+	pp.NextToken() // consume the PROGRAM token
 
 	// semicolon check in ParseDeclaration and ParseStatement
 
@@ -124,6 +142,7 @@ func (pp *ParserPointer) ParseDeclarations() *[]ast.Declaration {
 		case token.VARIABLE:
 			variable := pp.ParseVariableDeclaration(isGlobal)
 			*declarations = append(*declarations, &*variable)
+			fmt.Printf("variable declaration added to declarations\n")
 		default:
 			pp.ReportError("[Declaration] unexpected TOKEN encountered, expected either PROCEDURE or VARIABLE keyword")
 			return nil
@@ -133,6 +152,8 @@ func (pp *ParserPointer) ParseDeclarations() *[]ast.Declaration {
 		if !pp.CurrentTokenIs(token.SEMICOLON) {
 			pp.ReportError("[Declaration] expected SEMICOLON after declaration")
 			return nil
+		} else {
+			pp.NextToken()
 		}
 	}
 
@@ -153,13 +174,14 @@ func (pp *ParserPointer) ParseProcedureDeclaration(isGlobal bool) *ast.Procedure
 }
 
 func (pp *ParserPointer) ParserProcedureHeader() *ast.ProcedureHeader {
-	procedureHeader := &ast.ProcedureHeader{}
+	procedureHeader := &ast.ProcedureHeader{Identifier: &ast.Identifier{}}
 
 	if !pp.CurrentTokenIs(token.PROCEDURE) {
 		pp.ReportError("[Procedure Header] expected PROCEDURE keyword")
 		return nil
 	}
 	pp.NextToken()
+	fmt.Printf("onto identifer \n")
 
 	if !pp.CurrentTokenIs(token.IDENTIFIER) {
 		pp.ReportError("[Procedure Header] expected IDENTIFIER after PROCEDURE keyword")
@@ -168,12 +190,14 @@ func (pp *ParserPointer) ParserProcedureHeader() *ast.ProcedureHeader {
 	procedureHeader.Identifier.Name = pp.currentToken.Value
 	pp.NextToken()
 
+	fmt.Printf("onto colon \n")
 	if !pp.CurrentTokenIs(token.COLON) {
 		pp.ReportError("[Procedure Header] expected COLON after IDENTIFIER in PROCEDURE header")
 		return nil
 	}
 	pp.NextToken()
 
+	fmt.Printf("onto type \n")
 	procedureHeader.Type = pp.ParseTypeMark()
 
 	if !pp.CurrentTokenIs(token.LPAREN) {
@@ -194,7 +218,7 @@ func (pp *ParserPointer) ParserProcedureHeader() *ast.ProcedureHeader {
 }
 
 func (pp *ParserPointer) ParseParameterList() *ast.ParameterList {
-	parameterList := &ast.ParameterList{Parameters: nil}
+	parameterList := &ast.ParameterList{Parameters: &[]ast.Parameter{}}
 
 	// parameter list would never be global
 	firstParameter := pp.ParseParameter(false)
@@ -229,11 +253,19 @@ func (pp *ParserPointer) ParseProcedureBody() *ast.ProcedureBody {
 	procedureBody.Declarations = pp.ParseDeclarations()
 	procedureBody.Statements = pp.ParseStatements()
 
+	if !(pp.CurrentTokenIs(token.END) && pp.NextTokenIs(token.PROCEDURE)) {
+		pp.ReportError("[Procedure Body] expected END PROCEDURE after declarations and statements")
+		return nil
+	}
+
+	pp.NextToken() // consume the END token
+	pp.NextToken() // consume the PROCEDURE token
+
 	return procedureBody
 }
 
 func (pp *ParserPointer) ParseVariableDeclaration(isGlobal bool) *ast.VariableDeclaration {
-	variableDeclaration := &ast.VariableDeclaration{IsGlobal: isGlobal}
+	variableDeclaration := &ast.VariableDeclaration{IsGlobal: isGlobal, Identifier: &ast.Identifier{}}
 
 	if !pp.CurrentTokenIs(token.VARIABLE) {
 		pp.ReportError("[Variable Declaration] expected VARIABLE keyword")
@@ -241,6 +273,7 @@ func (pp *ParserPointer) ParseVariableDeclaration(isGlobal bool) *ast.VariableDe
 	}
 	pp.NextToken()
 
+	fmt.Printf("onto identifer \n")
 	if !pp.CurrentTokenIs(token.IDENTIFIER) {
 		pp.ReportError("[Variable Declaration] expected IDENTIFIER after VARIABLE keyword")
 		return nil
@@ -248,6 +281,7 @@ func (pp *ParserPointer) ParseVariableDeclaration(isGlobal bool) *ast.VariableDe
 	variableDeclaration.Identifier.Name = pp.currentToken.Value
 	pp.NextToken()
 
+	fmt.Printf("onto colon \n")
 	if !pp.CurrentTokenIs(token.COLON) {
 		pp.ReportError("[Variable Declaration] expected COLON after IDENTIFIER")
 		return nil
@@ -256,6 +290,7 @@ func (pp *ParserPointer) ParseVariableDeclaration(isGlobal bool) *ast.VariableDe
 
 	variableDeclaration.Type = pp.ParseTypeMark()
 
+	fmt.Printf("onto bound \n")
 	if pp.CurrentTokenIs(token.LSQUARE) {
 		pp.NextToken()
 		if !pp.CurrentTokenIs(token.NUMBER) {
@@ -270,10 +305,12 @@ func (pp *ParserPointer) ParseVariableDeclaration(isGlobal bool) *ast.VariableDe
 		}
 		variableDeclaration.IsArray = true
 		pp.NextToken()
+		fmt.Printf("bound present \n")
 	} else {
 		variableDeclaration.IsArray = false
 	}
 
+	fmt.Printf("back to declaration function \n")
 	return variableDeclaration
 }
 
@@ -309,24 +346,24 @@ func (pp *ParserPointer) ParseBound() *ast.Bound {
 }
 
 // (exception) ParseStatement doesn't consume the END or ELSE token
-func (pp *ParserPointer) ParseStatements() *[]ast.Statement {
-	statements := &[]ast.Statement{}
+func (pp *ParserPointer) ParseStatements() []ast.Statement {
+	statements := []ast.Statement{}
 
 	// TODO - should the for loop look for a semicolon?
 	for !(pp.CurrentTokenIs(token.END) || pp.CurrentTokenIs(token.ELSE)) {
 		switch pp.currentToken.Type {
 		case token.IF:
 			ifStatement := pp.ParseIfStatement()
-			*statements = append(*statements, &*ifStatement)
+			statements = append(statements, ifStatement)
 		case token.FOR:
 			forStatement := pp.ParseLoopStatement()
-			*statements = append(*statements, &*forStatement)
+			statements = append(statements, forStatement)
 		case token.RETURN:
 			returnStatement := pp.ParseReturnStatement()
-			*statements = append(*statements, &*returnStatement)
+			statements = append(statements, returnStatement)
 		case token.IDENTIFIER:
 			assignmentStatement := pp.ParseAssignmentStatement()
-			*statements = append(*statements, &*assignmentStatement)
+			statements = append(statements, assignmentStatement)
 		default:
 			pp.ReportError("[Statement] expected IF, FOR, RETURN or ASSIGNMENT statement")
 			return nil
@@ -336,6 +373,8 @@ func (pp *ParserPointer) ParseStatements() *[]ast.Statement {
 		if !pp.CurrentTokenIs(token.SEMICOLON) {
 			pp.ReportError("[Statement] expected SEMICOLON after statement")
 			return nil
+		} else {
+			pp.NextToken()
 		}
 	}
 
@@ -346,7 +385,7 @@ func (pp *ParserPointer) ParseStatements() *[]ast.Statement {
 }
 
 func (pp *ParserPointer) ParseProcedureCall() *ast.ProcedureCall {
-	procedureCall := &ast.ProcedureCall{}
+	procedureCall := &ast.ProcedureCall{Identifier: &ast.Identifier{}}
 
 	if !pp.CurrentTokenIs(token.IDENTIFIER) {
 		pp.ReportError("[Procedure Call] expected IDENTIFIER")
@@ -430,10 +469,13 @@ func (pp *ParserPointer) ParseIfStatement() *ast.IfStatement {
 		return nil
 	}
 
+	fmt.Printf("if condition parsed, onto RPAREN \n")
+
 	if !pp.CurrentTokenIs(token.RPAREN) {
 		pp.ReportError("[If Statement] expected RIGHT PARENTHESIS after IF condition")
 		return nil
 	}
+	pp.NextToken()
 
 	if !pp.CurrentTokenIs(token.THEN) {
 		pp.ReportError("[If Statement] expected THEN keyword after IF condition")
@@ -442,11 +484,14 @@ func (pp *ParserPointer) ParseIfStatement() *ast.IfStatement {
 	pp.NextToken()
 
 	ifStatement.ThenBlock = pp.ParseStatements()
+	fmt.Printf("done with THEN, onto ELSE \n")
 
 	if pp.CurrentTokenIs(token.ELSE) {
 		pp.NextToken()
 		ifStatement.ElseBlock = pp.ParseStatements()
 	}
+
+	print("done with ELSE, onto END IF \n")
 
 	if !(pp.CurrentTokenIs(token.END) && pp.NextTokenIs(token.IF)) {
 		pp.ReportError("[If Statement] expected END IF after THEN and ELSE blocks")
@@ -454,8 +499,10 @@ func (pp *ParserPointer) ParseIfStatement() *ast.IfStatement {
 	}
 	pp.NextToken() // consume the END token
 	pp.NextToken() // consume the IF token
-	pp.NextToken() // move to the next token after IF-ELSE block
+	// this was inccorrect as I was consuming the semicolon
+	//pp.NextToken() // move to the next token after IF-ELSE block
 
+	fmt.Printf("done with IF, back to statement function\n")
 	return ifStatement
 }
 
@@ -513,6 +560,8 @@ func (pp *ParserPointer) ParseReturnStatement() *ast.ReturnStatement {
 	pp.NextToken()
 
 	returnStatement.Expression = pp.ParseExpression()
+
+	fmt.Printf("expression detected, back to statement function\n")
 
 	return returnStatement
 }
@@ -737,7 +786,7 @@ func (pp *ParserPointer) ParseFactor() *ast.Factor {
 }
 
 func (pp *ParserPointer) ParseName() *ast.Name {
-	name := &ast.Name{}
+	name := &ast.Name{Identifier: &ast.Identifier{}}
 
 	if !pp.CurrentTokenIs(token.IDENTIFIER) {
 		pp.ReportError("[Identifier] expected IDENTIFIER")
@@ -762,17 +811,17 @@ func (pp *ParserPointer) ParseName() *ast.Name {
 	return name
 }
 
-func (pp *ParserPointer) ParseArgumentList() *ast.ArguementList {
-	argumentList := &ast.ArguementList{}
+func (pp *ParserPointer) ParseArgumentList() *ast.ArgumentList {
+	argumentList := &ast.ArgumentList{Arguments: &[]ast.Expression{}}
 
 	firstExpression := pp.ParseExpression()
-	*argumentList.Arguements = append(*argumentList.Arguements, *firstExpression)
+	*argumentList.Arguments = append(*argumentList.Arguments, *firstExpression)
 
 	// todo - check if an error can be thrown in the func
 	if pp.CurrentTokenIs(token.LPAREN) {
 		for {
 			expression := pp.ParseExpression()
-			*argumentList.Arguements = append(*argumentList.Arguements, *expression)
+			*argumentList.Arguments = append(*argumentList.Arguments, *expression)
 
 			if pp.CurrentTokenIs(token.COMMA) {
 				pp.NextToken()

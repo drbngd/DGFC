@@ -20,7 +20,7 @@ func New(input string) *ScanPointer {
 	// first convert the input string to lower case
 	// TODO - add row and col for the current position
 	input = strings.ToLower(input)
-	sp := &ScanPointer{input: input, line: 1, col: 0}
+	sp := &ScanPointer{input: input, line: 0, col: 0}
 	sp.ReadNextChar()
 	return sp
 }
