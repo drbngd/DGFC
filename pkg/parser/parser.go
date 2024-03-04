@@ -48,6 +48,8 @@ func (pp *ParserPointer) ReportError(msg string) {
 	errorMessage := fmt.Sprintf("Error at line %d, column %d: %s. Received token: %s", line, col, msg, pp.currentToken.Value)
 
 	pp.errors = append(pp.errors, errorMessage)
+	//print(errorMessage)
+
 }
 
 func (pp *ParserPointer) GetErrors() []string {
@@ -107,7 +109,10 @@ func (pp *ParserPointer) ParseProgramBody() *ast.ProgramBody {
 
 	programBody := &ast.ProgramBody{}
 	programBody.Declarations = pp.ParseDeclarations() // TODO: make all var/proc declarations global
+	print("back to parse program body \n")
+
 	programBody.Statements = pp.ParseStatements()
+	print("back to parse program body \n")
 
 	if !(pp.CurrentTokenIs(token.END) && pp.NextTokenIs(token.PROGRAM)) {
 		pp.ReportError("[Program Body] expected END PROGRAM after declarations and statements")
@@ -256,13 +261,22 @@ func (pp *ParserPointer) ParseParameter(isGlobal bool) *ast.Parameter {
 func (pp *ParserPointer) ParseProcedureBody() *ast.ProcedureBody {
 	procedureBody := &ast.ProcedureBody{}
 	procedureBody.Declarations = pp.ParseDeclarations()
-	procedureBody.Statements = pp.ParseStatements()
+	print("back to parse procedure body \n")
 
+	print("onto procedure body statements \n")
+
+	procedureBody.Statements = pp.ParseStatements()
+	print("back to parse procedure body \n")
+	print("current token is: " + pp.currentToken.Value + "\n")
+
+	print("onto end procedure \n")
 	if !(pp.CurrentTokenIs(token.END) && pp.NextTokenIs(token.PROCEDURE)) {
+		print("error in end procedure \n")
 		pp.ReportError("[Procedure Body] expected END PROCEDURE after declarations and statements")
 		return nil
 	}
 
+	print("end procedure detected \n")
 	pp.NextToken() // consume the END token
 	pp.NextToken() // consume the PROCEDURE token
 
@@ -361,13 +375,20 @@ func (pp *ParserPointer) ParseStatements() []ast.Statement {
 			ifStatement := pp.ParseIfStatement()
 			statements = append(statements, ifStatement)
 		case token.FOR:
+			print("parsing for statement \n")
 			forStatement := pp.ParseLoopStatement()
+			print("for statement parsed \n")
+			print(forStatement.ToString())
 			statements = append(statements, forStatement)
 		case token.RETURN:
+			print("parsing return statement \n")
 			returnStatement := pp.ParseReturnStatement()
+			print("return statement parsed \n")
 			statements = append(statements, returnStatement)
 		case token.IDENTIFIER:
+			print("parsing assignment statement \n")
 			assignmentStatement := pp.ParseAssignmentStatement()
+			print("assignment statement parsed \n")
 			statements = append(statements, assignmentStatement)
 		default:
 			pp.ReportError("[Statement] expected IF, FOR, RETURN or ASSIGNMENT statement")
@@ -375,16 +396,19 @@ func (pp *ParserPointer) ParseStatements() []ast.Statement {
 		}
 
 		// check for semicolon
+		print("checking for semicolon \n")
 		if !pp.CurrentTokenIs(token.SEMICOLON) {
 			pp.ReportError("[Statement] expected SEMICOLON after statement")
 			return nil
 		} else {
+			print("semicolon detected \n")
 			pp.NextToken()
 		}
 	}
 
 	// (Exception) we will not consume the END or ELSE token here
 	// each grammar rule that calls ParseStatements will consume the END or ELSE token
+	print("going back to where ParseStatements was called \n")
 
 	return statements
 }
@@ -499,11 +523,12 @@ func (pp *ParserPointer) ParseIfStatement() *ast.IfStatement {
 	pp.NextToken()
 
 	ifStatement.ThenBlock = pp.ParseStatements()
-	fmt.Printf("done with THEN, onto ELSE \n")
+	print("back to parse if statement \n")
 
 	if pp.CurrentTokenIs(token.ELSE) {
 		pp.NextToken()
 		ifStatement.ElseBlock = pp.ParseStatements()
+		print("back to parse loop else block \n")
 	}
 
 	print("done with ELSE, onto END IF \n")
@@ -550,8 +575,11 @@ func (pp *ParserPointer) ParseLoopStatement() *ast.LoopStatement {
 		pp.ReportError("[For Statement] expected RIGHT PARENTHESIS after CONDITION")
 		return nil
 	}
+	pp.NextToken()
 
 	forStatement.Body = pp.ParseStatements()
+	print("back to parse loop body \n")
+	print("current token is: " + pp.currentToken.Value + "\n")
 
 	if !(pp.CurrentTokenIs(token.END) && pp.NextTokenIs(token.FOR)) {
 		pp.ReportError("[For Statement] expected END FOR after LOOP body")
@@ -559,9 +587,9 @@ func (pp *ParserPointer) ParseLoopStatement() *ast.LoopStatement {
 	}
 
 	pp.NextToken() // consume the END token
-	pp.NextToken() // consume the FOR token
-	pp.NextToken() // move to the next token after FOR block
+	pp.NextToken() // consume the FOR token and move to next token
 
+	print("done with FOR, back to statement function \n")
 	return forStatement
 }
 
