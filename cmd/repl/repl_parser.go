@@ -11,7 +11,7 @@ import (
 
 const PROMPT = ">> "
 
-const fileLocation = "/Users/drbngd/Documents/UC/14_2024_SPR/EECE6083/DGFC/reference_programs/correct/math.src"
+const fileLocation = "/Users/drbngd/Documents/UC/14_2024_SPR/EECE6083/DGFC/reference_programs/correct/iterativeFib.src"
 
 func Start(in io.Reader, out io.Writer) {
 	fileContent, err := ioutil.ReadFile(fileLocation)

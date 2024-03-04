@@ -122,8 +122,8 @@ func (pp *ParserPointer) ParseProgramBody() *ast.ProgramBody {
 	return programBody
 }
 
-func (pp *ParserPointer) ParseDeclarations() *[]ast.Declaration {
-	declarations := &[]ast.Declaration{}
+func (pp *ParserPointer) ParseDeclarations() []ast.Declaration {
+	declarations := []ast.Declaration{}
 	isGlobal := false
 
 	// keep appending to declarations until we reach the BEGIN token
@@ -138,10 +138,10 @@ func (pp *ParserPointer) ParseDeclarations() *[]ast.Declaration {
 		switch pp.currentToken.Type {
 		case token.PROCEDURE:
 			procedure := pp.ParseProcedureDeclaration(isGlobal)
-			*declarations = append(*declarations, &*procedure)
+			declarations = append(declarations, &*procedure)
 		case token.VARIABLE:
 			variable := pp.ParseVariableDeclaration(isGlobal)
-			*declarations = append(*declarations, &*variable)
+			declarations = append(declarations, &*variable)
 			fmt.Printf("variable declaration added to declarations\n")
 		default:
 			pp.ReportError("[Declaration] unexpected TOKEN encountered, expected either PROCEDURE or VARIABLE keyword")
@@ -218,11 +218,15 @@ func (pp *ParserPointer) ParserProcedureHeader() *ast.ProcedureHeader {
 }
 
 func (pp *ParserPointer) ParseParameterList() *ast.ParameterList {
-	parameterList := &ast.ParameterList{Parameters: &[]ast.Parameter{}}
+	parameterList := &ast.ParameterList{Parameters: []ast.Parameter{}}
+
+	if pp.CurrentTokenIs(token.RPAREN) {
+		return parameterList
+	}
 
 	// parameter list would never be global
 	firstParameter := pp.ParseParameter(false)
-	*parameterList.Parameters = append(*parameterList.Parameters, *firstParameter)
+	parameterList.Parameters = append(parameterList.Parameters, *firstParameter)
 
 	for pp.CurrentTokenIs(token.COMMA) {
 		pp.NextToken()
@@ -233,7 +237,8 @@ func (pp *ParserPointer) ParseParameterList() *ast.ParameterList {
 		}
 
 		parameter := pp.ParseParameter(false)
-		*parameterList.Parameters = append(*parameterList.Parameters, *parameter)
+		parameterList.Parameters = append(parameterList.Parameters, *parameter)
+
 	}
 
 	// todo - add case where there are multiple commas but no parameters
@@ -391,6 +396,8 @@ func (pp *ParserPointer) ParseProcedureCall() *ast.ProcedureCall {
 		pp.ReportError("[Procedure Call] expected IDENTIFIER")
 		return nil
 	}
+	print("parsing procedure call \n")
+
 	procedureCall.Identifier.Name = pp.currentToken.Value
 	pp.NextToken()
 
@@ -398,29 +405,37 @@ func (pp *ParserPointer) ParseProcedureCall() *ast.ProcedureCall {
 		pp.ReportError("[Procedure Call] expected LPAREN after IDENTIFIER")
 		return nil
 	}
+	print("LPAREN detected \n")
 	pp.NextToken()
 
+	print("now parsing argument list \n")
 	procedureCall.ArguementList = pp.ParseArgumentList()
 
 	if !pp.CurrentTokenIs(token.RPAREN) {
 		pp.ReportError("[Procedure Call] expected RPAREN after ARGUEMENT LIST")
 		return nil
 	}
+	print("RPAREN detected \n")
 	pp.NextToken()
 
 	return procedureCall
 }
 
 func (pp *ParserPointer) ParseAssignmentStatement() *ast.AssignmentStatement {
-	assignmentStatement := &ast.AssignmentStatement{}
+	assignmentStatement := &ast.AssignmentStatement{Destination: &ast.Destination{Identifier: &ast.Identifier{}}, Expression: &ast.Expression{}}
 
+	print("parsing assignment statement \n")
 	assignmentStatement.Destination = pp.ParseDestination()
+
+	print("destination parsed, onto assignment operator \n")
 
 	if !pp.CurrentTokenIs(token.ASSIGN) {
 		pp.ReportError("[Assignment Statement] expected ASSIGNMENT operator")
 		return nil
 	}
 	pp.NextToken()
+
+	print("assignment operator parsed, onto expression \n")
 
 	assignmentStatement.Expression = pp.ParseExpression()
 
@@ -585,6 +600,7 @@ func (pp *ParserPointer) ParseExpression() *ast.Expression {
 
 	if pp.CurrentTokenIs(token.NOT) {
 		expression.IsNot = true
+		pp.NextToken()
 	}
 
 	expression.ArithOp = pp.ParseArithmeticOperation()
@@ -598,8 +614,8 @@ func (pp *ParserPointer) ParseExpression() *ast.Expression {
 	return expression
 }
 
-func (pp *ParserPointer) ParseAndOrList() *[]ast.AndOrExpression {
-	andOrList := &[]ast.AndOrExpression{}
+func (pp *ParserPointer) ParseAndOrList() []ast.AndOrExpression {
+	andOrList := []ast.AndOrExpression{}
 
 	// todo - check if an error can be thrown in the func
 	for pp.CurrentTokenIs(token.AND) || pp.CurrentTokenIs(token.OR) {
@@ -613,7 +629,7 @@ func (pp *ParserPointer) ParseAndOrList() *[]ast.AndOrExpression {
 		pp.NextToken()
 
 		andOr.Expression = pp.ParseExpression()
-		*andOrList = append(*andOrList, *andOr)
+		andOrList = append(andOrList, *andOr)
 	}
 
 	return andOrList
@@ -634,8 +650,8 @@ func (pp *ParserPointer) ParseArithmeticOperation() *ast.ArithmeticOperation {
 	return arithmeticOperation
 }
 
-func (pp *ParserPointer) ParseAddSubList() *[]ast.AddSubExpression {
-	addSubList := &[]ast.AddSubExpression{}
+func (pp *ParserPointer) ParseAddSubList() []ast.AddSubExpression {
+	addSubList := []ast.AddSubExpression{}
 
 	// todo - check if an error can be thrown in the func
 	for pp.CurrentTokenIs(token.ADD) || pp.CurrentTokenIs(token.SUB) {
@@ -649,7 +665,7 @@ func (pp *ParserPointer) ParseAddSubList() *[]ast.AddSubExpression {
 		pp.NextToken()
 
 		addSub.ArithmeticOperation = pp.ParseArithmeticOperation()
-		*addSubList = append(*addSubList, *addSub)
+		addSubList = append(addSubList, *addSub)
 	}
 
 	return addSubList
@@ -670,8 +686,8 @@ func (pp *ParserPointer) ParseRelation() *ast.Relation {
 	return relation
 }
 
-func (pp *ParserPointer) ParseRelationalOpList() *[]ast.RelationalExpression {
-	relationalOpList := &[]ast.RelationalExpression{}
+func (pp *ParserPointer) ParseRelationalOpList() []ast.RelationalExpression {
+	relationalOpList := []ast.RelationalExpression{}
 
 	// todo - check if an error can be thrown in the func
 	for pp.CurrentTokenIs(token.EQ) || pp.CurrentTokenIs(token.NOT_EQ) || pp.CurrentTokenIs(token.LT) ||
@@ -694,7 +710,7 @@ func (pp *ParserPointer) ParseRelationalOpList() *[]ast.RelationalExpression {
 		pp.NextToken()
 
 		relationalOp.Term = pp.ParseTerm()
-		*relationalOpList = append(*relationalOpList, *relationalOp)
+		relationalOpList = append(relationalOpList, *relationalOp)
 	}
 
 	return relationalOpList
@@ -715,8 +731,8 @@ func (pp *ParserPointer) ParseTerm() *ast.Term {
 	return term
 }
 
-func (pp *ParserPointer) ParseMulDivList() *[]ast.MultDivExpression {
-	mulDivList := &[]ast.MultDivExpression{}
+func (pp *ParserPointer) ParseMulDivList() []ast.MultDivExpression {
+	mulDivList := []ast.MultDivExpression{}
 
 	// todo - check if an error can be thrown in the func
 	for pp.CurrentTokenIs(token.TIMES) || pp.CurrentTokenIs(token.DIV) {
@@ -730,7 +746,7 @@ func (pp *ParserPointer) ParseMulDivList() *[]ast.MultDivExpression {
 		pp.NextToken()
 
 		mulDiv.Factor = pp.ParseFactor()
-		*mulDivList = append(*mulDivList, *mulDiv)
+		mulDivList = append(mulDivList, *mulDiv)
 	}
 
 	return mulDivList
@@ -740,10 +756,14 @@ func (pp *ParserPointer) ParseMulDivList() *[]ast.MultDivExpression {
 func (pp *ParserPointer) ParseFactor() *ast.Factor {
 	factor := &ast.Factor{}
 
+	print("parsing factor \n")
+
 	if pp.CurrentTokenIs(token.SUB) {
 		factor.IsNegative = true
 		pp.NextToken()
 	}
+
+	print("going into switch \n")
 
 	switch pp.currentToken.Type {
 	case token.TRUE:
@@ -758,9 +778,12 @@ func (pp *ParserPointer) ParseFactor() *ast.Factor {
 		factor.IsNumber = true
 		factor.Number = pp.ParseNumber()
 	case token.STRING:
+		print("string detected \n")
 		factor.IsString = true
 		factor.String = pp.ParseString()
 	case token.IDENTIFIER:
+		print("identifier detected \n")
+		print(pp.currentToken.Value + "\n")
 		// procedure call: next token is '('
 		if pp.NextTokenIs(token.LPAREN) {
 			factor.IsProcedureCall = true
@@ -770,6 +793,7 @@ func (pp *ParserPointer) ParseFactor() *ast.Factor {
 			factor.Name = pp.ParseName()
 		}
 	case token.LPAREN:
+		print("left parenthesis detected \n")
 		pp.NextToken()
 		factor.Expression = pp.ParseExpression()
 		if !pp.CurrentTokenIs(token.RPAREN) {
@@ -812,30 +836,28 @@ func (pp *ParserPointer) ParseName() *ast.Name {
 }
 
 func (pp *ParserPointer) ParseArgumentList() *ast.ArgumentList {
-	argumentList := &ast.ArgumentList{Arguments: &[]ast.Expression{}}
+	argumentList := &ast.ArgumentList{Arguments: []ast.Expression{}}
 
-	firstExpression := pp.ParseExpression()
-	*argumentList.Arguments = append(*argumentList.Arguments, *firstExpression)
-
-	// todo - check if an error can be thrown in the func
-	if pp.CurrentTokenIs(token.LPAREN) {
-		for {
-			expression := pp.ParseExpression()
-			*argumentList.Arguments = append(*argumentList.Arguments, *expression)
-
-			if pp.CurrentTokenIs(token.COMMA) {
-				pp.NextToken()
-			} else if pp.CurrentTokenIs(token.RPAREN) {
-				pp.NextToken()
-				break
-			} else {
-				pp.ReportError("[Argument List] expected COMMA or RPAREN")
-				return nil
-
-			}
-		}
+	if pp.CurrentTokenIs(token.RPAREN) {
+		return argumentList
 	}
 
+	firstExpression := pp.ParseExpression()
+	argumentList.Arguments = append(argumentList.Arguments, *firstExpression)
+
+	// todo - check if an error can be thrown in the func
+	for pp.CurrentTokenIs(token.COMMA) {
+		pp.NextToken()
+		// check for multiple commas
+		if pp.CurrentTokenIs(token.COMMA) {
+			pp.ReportError("[Argument List] expected EXPRESSION after COMMA, found another COMMA")
+			return nil
+		}
+		argument := pp.ParseExpression()
+		argumentList.Arguments = append(argumentList.Arguments, *argument)
+
+	}
+	print("done with argument list \n")
 	return argumentList
 }
 

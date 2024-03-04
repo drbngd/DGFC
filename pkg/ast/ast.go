@@ -23,14 +23,14 @@ func (ph *ProgramHeader) NodeType() string { return "ProgramHeader" }
 func (ph *ProgramHeader) ToString() string { return "program " + ph.Identifier.ToString() + "is" }
 
 type ProgramBody struct {
-	Declarations *[]Declaration
+	Declarations []Declaration
 	Statements   []Statement
 }
 
 func (pb *ProgramBody) NodeType() string { return "ProgramBody" }
 func (pb *ProgramBody) ToString() string {
 	returnString := ""
-	for _, d := range *pb.Declarations {
+	for _, d := range pb.Declarations {
 		returnString += d.ToString() + "\n"
 	}
 	returnString += "begin\n"
@@ -80,13 +80,13 @@ func (ph *ProcedureHeader) ToString() string {
 }
 
 type ParameterList struct {
-	Parameters *[]Parameter
+	Parameters []Parameter
 }
 
 func (pl *ParameterList) NodeType() string { return "ParameterList" }
 func (pl *ParameterList) ToString() string {
 	returnString := ""
-	for _, p := range *pl.Parameters {
+	for _, p := range pl.Parameters {
 		returnString += p.ToString() + ", "
 	}
 	return returnString
@@ -102,14 +102,14 @@ func (p *Parameter) ToString() string {
 }
 
 type ProcedureBody struct {
-	Declarations *[]Declaration
+	Declarations []Declaration
 	Statements   []Statement
 }
 
 func (pb *ProcedureBody) NodeType() string { return "ProcedureBody" }
 func (pb *ProcedureBody) ToString() string {
 	returnString := ""
-	for _, d := range *pb.Declarations {
+	for _, d := range pb.Declarations {
 		returnString += d.ToString() + "\n"
 	}
 	returnString += "begin\n"
@@ -269,7 +269,7 @@ func (i *Identifier) ToString() string { return i.Name }
 type Expression struct {
 	IsNot     bool
 	ArithOp   *ArithmeticOperation
-	AndOrList *[]AndOrExpression
+	AndOrList []AndOrExpression
 }
 
 func (e *Expression) NodeType() string { return "Expression" }
@@ -282,7 +282,7 @@ func (e *Expression) ToString() string {
 		returnString += e.ArithOp.ToString()
 	}
 	if e.AndOrList != nil {
-		for _, aoe := range *e.AndOrList {
+		for _, aoe := range e.AndOrList {
 			returnString += " " + aoe.ToString()
 		}
 	}
@@ -301,14 +301,14 @@ func (ae *AndOrExpression) ToString() string {
 
 type ArithmeticOperation struct {
 	Relation   *Relation
-	AddSubList *[]AddSubExpression
+	AddSubList []AddSubExpression
 }
 
 func (ao *ArithmeticOperation) NodeType() string { return "ArithmeticOperation" }
 func (ao *ArithmeticOperation) ToString() string {
 	returnString := ao.Relation.ToString()
 	if ao.AddSubList != nil {
-		for _, ase := range *ao.AddSubList {
+		for _, ase := range ao.AddSubList {
 			returnString += " " + ase.ToString()
 		}
 	}
@@ -327,14 +327,14 @@ func (ae *AddSubExpression) ToString() string {
 
 type Relation struct {
 	Term                    *Term
-	RelationalOperationList *[]RelationalExpression
+	RelationalOperationList []RelationalExpression
 }
 
 func (r *Relation) NodeType() string { return "Relation" }
 func (r *Relation) ToString() string {
 	returnString := r.Term.ToString()
 	if r.RelationalOperationList != nil {
-		for _, roe := range *r.RelationalOperationList {
+		for _, roe := range r.RelationalOperationList {
 			returnString += " " + roe.ToString()
 		}
 	}
@@ -353,14 +353,14 @@ func (roe *RelationalExpression) ToString() string {
 
 type Term struct {
 	Factor      *Factor
-	MultDivList *[]MultDivExpression
+	MultDivList []MultDivExpression
 }
 
 func (t *Term) NodeType() string { return "Term" }
 func (t *Term) ToString() string {
 	returnString := t.Factor.ToString()
 	if t.MultDivList != nil {
-		for _, mde := range *t.MultDivList {
+		for _, mde := range t.MultDivList {
 			returnString += " " + mde.ToString()
 		}
 	}
@@ -440,13 +440,13 @@ func (n *Name) ToString() string {
 }
 
 type ArgumentList struct {
-	Arguments *[]Expression
+	Arguments []Expression
 }
 
 func (al *ArgumentList) NodeType() string { return "ArgumentList" }
 func (al *ArgumentList) ToString() string {
 	returnString := ""
-	for _, a := range *al.Arguments {
+	for _, a := range al.Arguments {
 		returnString += a.ToString() + ", "
 	}
 	return returnString
