@@ -11,6 +11,8 @@ type ScanPointer struct {
 	currPos  int  // current pointer position
 	nextPos  int  // next pointer position
 	currChar byte // currChar at current position
+	line     int  // current line number
+	col      int  // current column number
 }
 
 // function to create a new ScanPointer
@@ -18,7 +20,7 @@ func New(input string) *ScanPointer {
 	// first convert the input string to lower case
 	// TODO - add row and col for the current position
 	input = strings.ToLower(input)
-	sp := &ScanPointer{input: input}
+	sp := &ScanPointer{input: input, line: 0, col: 0}
 	sp.ReadNextChar()
 	return sp
 }
@@ -32,6 +34,18 @@ func (sp *ScanPointer) ReadNextChar() {
 	}
 	sp.currPos = sp.nextPos
 	sp.nextPos += 1
+
+	if sp.currChar == '\n' {
+		sp.line += 1
+		sp.col = 0
+	} else {
+		sp.col += 1
+	}
+}
+
+// method to get the current character position
+func (sp *ScanPointer) GetPosition() (int, int) {
+	return sp.line, sp.col
 }
 
 // method to scan the next token
