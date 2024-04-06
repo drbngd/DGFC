@@ -5,16 +5,15 @@ import (
 	"DGFC/pkg/parser"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 )
 
 const PROMPT = ">> "
 
-const fileLocation = "reference_programs/incorrect/test1b.src"
+const fileLocation = "test/correct/math.src"
 
 func Start(in io.Reader, out io.Writer) {
-	fileContent, err := ioutil.ReadFile(fileLocation)
+	fileContent, err := os.ReadFile(fileLocation)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		os.Exit(1)

@@ -465,3 +465,206 @@ type String struct {
 
 func (s *String) NodeType() string { return "String" }
 func (s *String) ToString() string { return s.Value }
+
+//func TreePrint(node Node, indent string) {
+//	switch n := node.(type) {
+//	case *Program:
+//		fmt.Println(indent + "📦 PROGRAM")
+//		TreePrint(n.Header, indent+"  ")
+//		TreePrint(n.Body, indent+"  ")
+//
+//	case *ProgramHeader:
+//		fmt.Println(indent + "├─ PROGRAM HEADER " + n.Identifier.Name)
+//
+//	case *ProgramBody:
+//		fmt.Println(indent + "├─ PROGRAM BODY")
+//		for _, d := range n.Declarations {
+//			TreePrint(d, indent+"  ")
+//		}
+//		for _, s := range n.Statements {
+//			TreePrint(s, indent+"  ")
+//		}
+//
+//	case *ProcedureDeclaration:
+//		fmt.Print(indent + "├─ PROCEDURE ")
+//		if n.IsGlobal {
+//			fmt.Print("(global) ")
+//		}
+//		fmt.Println(n.Header.Identifier.Name)
+//		TreePrint(n.Header, indent+"  ")
+//		TreePrint(n.Body, indent+" │ ")
+//
+//	case *ProcedureHeader:
+//		fmt.Print(indent + "├─ PARAMETERS ")
+//		TreePrint(n.ParameterList, indent+"  ")
+//		fmt.Println(indent + "└─ RETURN TYPE " + n.Type.Name)
+//
+//	case *VariableDeclaration:
+//		fmt.Print(indent + "├─ VARIABLE ")
+//		if n.IsGlobal {
+//			fmt.Print("(global) ")
+//		}
+//		fmt.Print(n.Identifier.Name, ":", n.Type.Name)
+//		if n.IsArray {
+//			fmt.Print("[", n.Bound, "]")
+//		}
+//		fmt.Println()
+//
+//	case *ParameterList:
+//		for _, p := range n.Parameters {
+//			TreePrint(p, indent+"  ")
+//		}
+//
+//	case *Parameter:
+//		TreePrint(n.VariableDeclaration, indent)
+//
+//	case *ProcedureBody:
+//		fmt.Println(indent + "├─ PROCEDURE BODY")
+//		for _, d := range n.Declarations {
+//			TreePrint(d, indent+"  ")
+//		}
+//		for _, s := range n.Statements {
+//			TreePrint(s, indent+"  ")
+//		}
+//
+//	case *AssignmentStatement:
+//		fmt.Println(indent + "├─ ASSIGN")
+//		TreePrint(n.Destination, indent+" │ ")
+//		TreePrint(n.Expression, indent+" │ ")
+//
+//	case *IfStatement:
+//		fmt.Println(indent + "├─ IF")
+//		TreePrint(n.Condition, indent+" │ ")
+//		fmt.Println(indent + "├─ THEN")
+//		for _, s := range n.ThenBlock {
+//			TreePrint(s, indent+" │ ")
+//		}
+//		if n.ElseBlock != nil {
+//			fmt.Println(indent + "├─ ELSE")
+//			for _, s := range n.ElseBlock {
+//				TreePrint(s, indent+" │ ")
+//			}
+//		}
+//
+//	case *LoopStatement:
+//		fmt.Println(indent + "├─ LOOP")
+//		if n.Initialization != nil {
+//			TreePrint(n.Initialization, indent+" │ ")
+//		}
+//		TreePrint(n.Condition, indent+" │ ")
+//		fmt.Println(indent + "├─ BODY")
+//		for _, s := range n.Body {
+//			TreePrint(s, indent+" │ ")
+//		}
+//
+//	case *ReturnStatement:
+//		fmt.Println(indent + "├─ RETURN")
+//		if n.Expression != nil {
+//			TreePrint(n.Expression, indent+" │ ")
+//		}
+//
+//	case *ProcedureCall:
+//		fmt.Println(indent + "├─ PROCEDURE CALL " + n.Identifier.Name)
+//		TreePrint(n.ArguementList, indent+" │ ")
+//
+//	case *Identifier:
+//		fmt.Println(indent+"└─ ", n.Name)
+//
+//	case *Expression:
+//		fmt.Println(indent + "├─ EXPRESSION")
+//		if n.IsNot {
+//			fmt.Println(indent + " │ └─ NOT")
+//		}
+//		if n.ArithOp != nil {
+//			TreePrint(n.ArithOp, indent+" │ ")
+//		}
+//		for _, aoe := range n.AndOrList {
+//			TreePrint(aoe, indent+" │ ")
+//		}
+//
+//	case *AndOrExpression:
+//		fmt.Println(indent + " │ └─ " + n.Operator)
+//		TreePrint(n.Expression, indent+"   ")
+//
+//	case *ArithmeticOperation:
+//		fmt.Println(indent + " │ └─ ARITHMETIC OPERATION")
+//		TreePrint(n.Relation, indent+"   ")
+//		for _, ase := range n.AddSubList {
+//			TreePrint(ase, indent+"   ")
+//		}
+//
+//	case *AddSubExpression:
+//		fmt.Println(indent + "   └─ " + n.Operator)
+//		TreePrint(n.ArithmeticOperation, indent+"     ")
+//
+//	case *Relation:
+//		fmt.Println(indent + "   └─ RELATION")
+//		TreePrint(n.Term, indent+"     ")
+//		for _, roe := range n.RelationalOperationList {
+//			TreePrint(roe, indent+"     ")
+//		}
+//
+//	case *RelationalExpression:
+//		fmt.Println(indent + "     └─ " + n.Operator)
+//		TreePrint(n.Term, indent+"       ")
+//
+//	case *Term:
+//		fmt.Println(indent + "     └─ TERM")
+//		TreePrint(n.Factor, indent+"       ")
+//		for _, mde := range n.MultDivList {
+//			TreePrint(mde, indent+"       ")
+//		}
+//
+//	case *MultDivExpression:
+//		fmt.Println(indent + "       └─ " + n.Operator)
+//		TreePrint(n.Factor, indent+"         ")
+//
+//	case *Factor:
+//		fmt.Print(indent + "       └─ ")
+//		if n.IsNegative {
+//			fmt.Print("-")
+//		}
+//		if n.IsName {
+//			TreePrint(n.Name, indent+"         ")
+//		} else if n.IsNumber {
+//			fmt.Println("NUMBER " + n.Number.Value)
+//		} else if n.IsString {
+//			fmt.Println("STRING " + n.String.Value)
+//		} else if n.IsBool {
+//			fmt.Println("BOOLEAN " + n.BoolValue)
+//		} else if n.IsExpression {
+//			TreePrint(n.Expression, indent+"         ")
+//		} else if n.IsProcedureCall {
+//			TreePrint(n.ProcedureCall, indent+"         ")
+//		}
+//
+//	case *Name:
+//		fmt.Print(indent + "         └─ ") // Adjusted for alignment
+//		fmt.Println(n.Identifier.Name)
+//		if n.IsArray {
+//			fmt.Println(indent + "           └─ ARRAY INDEX")
+//			TreePrint(n.Expression, indent+"             ")
+//		}
+//
+//	case *ArgumentList:
+//		fmt.Println(indent + " │ └─ ARGUMENTS")
+//		for _, exp := range n.Arguments {
+//			TreePrint(exp, indent+"   ")
+//		}
+//
+//	case *Number:
+//		fmt.Println(indent + "└─ NUMBER " + n.Value)
+//
+//	case *String:
+//		fmt.Println(indent + "└─ STRING " + n.Value)
+//
+//	case *TypeMark:
+//		fmt.Println(indent+"└─ TYPE", n.Name)
+//
+//	case *Bound:
+//		fmt.Println(indent+"└─ BOUND", n.Value.Value)
+//
+//	default:
+//		fmt.Printf(indent+"└─ %s (unhandled type)\n", n.NodeType())
+//	}
+//}
