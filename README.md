@@ -1,2 +1,2 @@
-# DGFC
-Dhruv's Go Forge Compiler
+# Dhruv's Go Forge Compiler
+A compiler written in Go Lang      
