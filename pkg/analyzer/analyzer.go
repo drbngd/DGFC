@@ -2,7 +2,9 @@ package analyzer
 
 import (
 	"DGFC/pkg/ast"
+	"DGFC/pkg/token"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -51,7 +53,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		}
 
 		for _, s := range node.Statements {
-			//nodeType, err := st.Analyze(s, "GLOBAL")
+			//exprType, err := st.Analyze(s, "GLOBAL")
 			nodeType, err := st.Analyze(s, "")
 			if err != nil {
 				return nodeType, err
@@ -169,40 +171,139 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			return "", err
 		}
 
-		// get destination name
-		destName := node.Destination.Identifier.Name
+		//// get destination name
+		//destName := node.Destination.Identifier.Name
+		//
+		//// check if in symbol table - TODO: check if this is necessary
+		//_, ok := st.table[destName]
+		//if !ok {
+		//	return "", fmt.Errorf("Assignment Statement: Destination '%s' not found.", destName)
+		//}
 
-		// check if in symbol table - TODO: check if this is necessary
-		_, ok := st.table[destName]
-		if !ok {
-			return "", fmt.Errorf("Assignment Statement: Destination '%s' not found.", destName)
+		// analyze expression
+		exprType, err := st.Analyze(node.Expression, scope)
+		if err != nil {
+			return "", err
 		}
 
-		// get expression type
+		// check if type matches TODO - (int & bool are compatible) & (int & float are compatible)
+		if (destType == token.BOOLEAN || destType == token.INTEGER) && (exprType == token.BOOLEAN || exprType == token.INTEGER) {
+			return ReturnType(destType), nil
+		} else if (destType == token.FLOAT || destType == token.INTEGER) && (exprType == token.FLOAT || exprType == token.INTEGER) {
+			return ReturnType(destType), nil
+		} else if destType == token.STRING && exprType == token.STRING {
+			return ReturnType(destType), nil
+		} else {
+			return "", fmt.Errorf("Assignment Statement: Type mismatch")
+		}
 
 	case *ast.Destination:
-		// Handle Destination node
-		// ...
+		// check if present in symbol table
+		destName := node.Identifier.Name
+		_, ok := st.table[destName]
+		if !ok {
+			return "", fmt.Errorf("Destination: '%s' not found in symbol table", destName)
+		}
+		destType := st.table[destName].ReturnType
+
+		// analyze expression
+		exprType, err := st.Analyze(node.Expression, scope)
+		if err != nil {
+			return "", err
+		}
+
+		// if expression is an array, check if index is within bounds, and that expression is an integer
+		if node.IsArray {
+			// check if expression is of type integer
+			if exprType != "integer" {
+				return "", fmt.Errorf("Assingment Statement: Array index must be an integer")
+			}
+
+			//// TODO - bounds check to be done in Code Generation
+			//// check if index is within bounds
+			//if node.Expression.Bound.Value.Value > node.Expression.ArraySize {
+			//	return "", fmt.Errorf("Destination: Array index out of bounds")
+			//}
+		}
+
+		return ReturnType(destType), nil
 
 	case *ast.IfStatement:
-		// Handle IfStatement node
-		// ...
+		newScope := scope + ".IF." + string(st.IfElseCount)
+		st.IfElseEncountered()
+
+		// analyze condition
+		condType, err := st.Analyze(node.Condition, scope)
+		if err != nil {
+			return "", err
+		}
+		// check if condition is of type bool or int
+		if condType != token.BOOLEAN && condType != token.INTEGER {
+			return "", fmt.Errorf("If Statement: Condition must be of type bool or int")
+		}
+
+		// analyze then block -> use new scope
+		for _, s := range node.ThenBlock {
+			_, err := st.Analyze(s, newScope+".THEN")
+			if err != nil {
+				return "", err
+			}
+		}
+
+		// analyze else block
+		for _, s := range node.ElseBlock {
+			_, err := st.Analyze(s, newScope+".ELSE")
+			if err != nil {
+				return "", err
+			}
+		}
 
 	case *ast.LoopStatement:
-		// Handle LoopStatement node
-		// ...
+		newScope := scope + ".LOOP." + string(st.ForLoopCount)
+		st.ForLoopEncountered()
+
+		// analyze initialization statement
+		_, err := st.Analyze(node.Initialization, scope)
+		if err != nil {
+			return "", err
+		}
+
+		// analyze condition statement
+		condType, err := st.Analyze(node.Condition, scope)
+		if err != nil {
+			return "", err
+		}
+		// check if condition is of type bool or int
+		if condType != token.BOOLEAN && condType != token.INTEGER {
+			return "", fmt.Errorf("Loop Statement: Condition must be of type bool or int")
+		}
+
+		// analyze body
+		for _, s := range node.Body {
+			_, err := st.Analyze(s, newScope)
+			if err != nil {
+				return "", err
+			}
+		}
 
 	case *ast.ReturnStatement:
-		// Handle ReturnStatement node
-		// ...
+		// analyze expression
+		exprType, err := st.Analyze(node.Expression, scope)
+		if err != nil {
+			return "", err
+		}
+
+		// need to check if return type matches procedure return type
+		requiredReturnType := GetLastProcedureName(scope)
+		if string(exprType) != requiredReturnType {
+			return "", fmt.Errorf("Return Statement: Return type does not match procedure return type")
+		}
 
 	case *ast.Identifier:
-		// Handle Identifier node
-		// ...
+		// nothing to do here
 
 	case *ast.Expression:
-		// Handle Expression node
-		// ...
+		// a lot to do here
 
 	case *ast.AndOrExpression:
 		// Handle AndOrExpression node
@@ -266,4 +367,21 @@ func GetProcedureParams(pd ast.ProcedureDeclaration) []string {
 		params = append(params, p.VariableDeclaration.Type.Name)
 	}
 	return params
+}
+
+// TODO - need to test is
+func GetLastProcedureName(scope string) string {
+	// Split the scope string by the period character
+	elements := strings.Split(scope, ".")
+
+	// Iterate over the elements in reverse order
+	for i := len(elements) - 1; i >= 0; i-- {
+		// If the element is not a keyword (GLOBAL, IF, LOOP, ELSE), return it
+		if elements[i] != "ELSE" && elements[i] != "THEN" && elements[i] != "IF" && elements[i] != "LOOP" && elements[i] != "GLOBAL" {
+			return elements[i]
+		}
+	}
+
+	// If no procedure name is found, return an empty string
+	return ""
 }

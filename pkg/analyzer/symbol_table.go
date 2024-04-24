@@ -20,12 +20,16 @@ type Symbol struct {
 }
 
 type SymbolTable struct {
-	table map[string]Symbol
+	table        map[string]Symbol
+	IfElseCount  int
+	ForLoopCount int
 }
 
 func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{
-		table: make(map[string]Symbol),
+		table:        make(map[string]Symbol),
+		IfElseCount:  0,
+		ForLoopCount: 0,
 	}
 }
 
@@ -60,6 +64,14 @@ func (st *SymbolTable) AddSymbol(s Symbol) (bool, Symbol) {
 			return true, s
 		}
 	}
+}
+
+func (st *SymbolTable) IfElseEncountered() {
+	st.IfElseCount++
+}
+
+func (st *SymbolTable) ForLoopEncountered() {
+	st.ForLoopCount++
 }
 
 //func (st *SymbolTable) PrintTable() {
