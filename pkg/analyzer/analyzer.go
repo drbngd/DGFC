@@ -41,7 +41,10 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		}
 
 	case *ast.ProgramHeader:
-		// nothing to do in the header
+		_, err := st.Analyze(node.Identifier, "GLOBAL")
+		if err != nil {
+			return "", err
+		}
 
 	case *ast.ProgramBody:
 		// all declarations in Progam Body are global
@@ -53,47 +56,67 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		}
 
 		for _, s := range node.Statements {
-			//exprType, err := st.Analyze(s, "GLOBAL")
-			nodeType, err := st.Analyze(s, "")
+			nodeType, err := st.Analyze(s, "GLOBAL")
 			if err != nil {
 				return nodeType, err
 			}
 		}
 
 	case *ast.ProcedureDeclaration:
-		// get procedure name for scope
+		// get procedure name, return type, scope, and param list
 		procName := node.Header.Identifier.Name
-		currentScope := scope + "." + procName
+		procReturnType := node.Header.Type.Name
+		newScope := scope + "." + procName
 		if node.IsGlobal {
-			currentScope = "GLOBAL"
+			newScope = "GLOBAL"
 		}
-
-		// get param list & return type
 		paramList := GetProcedureParams(*node)
-		returnType := node.Header.Type.Name
 
-		// first analyze the header & body for any errors
-		nodeType, err := st.Analyze(node.Header, currentScope)
-		if err != nil {
-			return nodeType, err
-		}
-		nodeType, err = st.Analyze(node.Body, currentScope)
-		if err != nil {
-			return nodeType, err
-		}
-
-		// no errors found -> add to symbol table
-		sym := NewSymbol(procName, "Procedure", returnType, scope, true, paramList, false, "0")
+		// first: add procedure to symbol table
+		sym := NewSymbol(procName, "Procedure", procReturnType, scope, true, false, "0")
 		st.AddSymbol(sym)
 
+		// second: add procedure's params to symbol table
+		for _, p := range paramList {
+			paramName := p.Identifier.Name
+			paramType := p.Type.Name
+			isArray := p.IsArray
+			if p.IsGlobal {
+				return "", fmt.Errorf("Procedure Declaration: Parameters cannot be global")
+			}
+			sym := NewSymbol(paramName, "Procedure Param", paramType, newScope, false, isArray, "0")
+			st.AddSymbol(sym)
+		}
+
+		// third: analyze the header & body
+		nodeType, err := st.Analyze(node.Header, newScope)
+		if err != nil {
+			return nodeType, err
+		}
+		nodeType, err = st.Analyze(node.Body, newScope)
+		if err != nil {
+			return nodeType, err
+		}
+
 	case *ast.ProcedureHeader:
-		// nothing to do in the header
+		_, err := st.Analyze(node.Identifier, scope)
+		if err != nil {
+			return "", err
+		}
 
 	case *ast.ParameterList:
-		// nothing to do, handled in ProcedureDeclaration
+		for _, p := range node.Parameters {
+			nodeType, err := st.Analyze(&p, scope)
+			if err != nil {
+				return nodeType, err
+			}
+		}
 
 	case *ast.Parameter:
-		// nothing to do, handled in ProcedureDeclaration
+		_, err := st.Analyze(node.VariableDeclaration, scope)
+		if err != nil {
+			return "", err
+		}
 
 	case *ast.ProcedureBody:
 		for _, d := range node.Declarations {
@@ -120,7 +143,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		arrBound := node.Bound.Value.Value
 
 		// add to symbol table
-		sym := NewSymbol(name, "Variable", varType, scope, false, nil, node.IsArray, arrBound)
+		sym := NewSymbol(name, "Variable", varType, scope, false, node.IsArray, arrBound)
 		st.AddSymbol(sym)
 
 	case *ast.TypeMark:
@@ -485,10 +508,11 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 	return "", nil
 }
 
-func GetProcedureParams(pd ast.ProcedureDeclaration) []string {
-	params := []string{}
+func GetProcedureParams(pd ast.ProcedureDeclaration) []ast.VariableDeclaration {
+	params := []ast.VariableDeclaration{}
+
 	for _, p := range pd.Header.ParameterList.Parameters {
-		params = append(params, p.VariableDeclaration.Type.Name)
+		params = append(params, *p.VariableDeclaration)
 	}
 	return params
 }
