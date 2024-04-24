@@ -83,7 +83,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		}
 
 		// no errors found -> add to symbol table
-		sym := NewSymbol(procName, "Procedure", returnType, scope, true, paramList, false, 0)
+		sym := NewSymbol(procName, "Procedure", returnType, scope, true, paramList, false, "0")
 		st.AddSymbol(sym)
 
 	case *ast.ProcedureHeader:
@@ -373,7 +373,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		}
 	case *ast.RelationalExpression:
 		// analyze the term
-		relType, err := st.Analyze(node.Relation, scope)
+		relType, err := st.Analyze(node.Term, scope)
 		if err != nil {
 			return "", err
 		}
@@ -381,7 +381,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 
 	case *ast.Term:
 		// analyze the factor
-		factorType, err := st.Analyze(node.Factor, scope)
+		_, err := st.Analyze(node.Factor, scope)
 		if err != nil {
 			return "", err
 		}
@@ -407,24 +407,75 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return exprType, nil
 
 	case *ast.Factor:
-		// Handle Factor node
-		// ...
+		// analyze the expression
+		if node.IsExpression {
+			_, err := st.Analyze(node.Expression, scope)
+			if err != nil {
+				return "", err
+			}
+		} else if node.IsProcedureCall {
+			_, err := st.Analyze(node.ProcedureCall, scope)
+			if err != nil {
+				return "", err
+			}
+		} else if node.IsNumber {
+			_, err := st.Analyze(node.Number, scope)
+			if err != nil {
+				return "", err
+			} else {
+				// code to return type of number
+			}
+		} else if node.IsString {
+			_, err := st.Analyze(node.String, scope)
+			if err != nil {
+				return "", err
+			} else {
+				return token.STR, nil
+			}
+		} else if node.IsName {
+			_, err := st.Analyze(node.Name, scope)
+			if err != nil {
+				return "", err
+			}
+		}
 
 	case *ast.Name:
-		// Handle Name node
-		// ...
+		// check if present in symbol table & if it is array does the symbol has the record of being an array
+		isArray := node.IsArray
+		name := node.Identifier.Name
+
+		// check if present in symbol table and if it is an array
+		_, ok := st.table[name]
+		if !ok {
+			return "", fmt.Errorf("Name: '%s' not found in symbol table", name)
+		} else if isArray && !st.table[name].IsArray {
+			return "", fmt.Errorf("Name: '%s' is not an array", name)
+		}
+
+		// check if expression is an int value
+		exprType, err := st.Analyze(node.Expression, scope)
+		if err != nil {
+			return "", err
+		} else if exprType != token.INTEGER {
+			return "", fmt.Errorf("Name: Array index must be an integer")
+		}
+
+		return ReturnType(st.table[name].ReturnType), nil
 
 	case *ast.ArgumentList:
-		// Handle ArgumentList node
-		// ...
+		for _, a := range node.Arguments {
+			_, err := st.Analyze(&a, scope)
+			if err != nil {
+				return "", err
+			}
+		}
 
 	case *ast.Number:
-		// Handle Number node
-		// ...
+		num := node.Value
+		return ReturnType(CheckNumberType(num)), nil
 
 	case *ast.String:
-		// Handle String node
-		// ...
+		return token.STR, nil
 
 	default:
 		// Handle unhandled types
@@ -468,5 +519,13 @@ func CheckTypeCompatibility(t1, t2 string) bool {
 		//	return true
 	} else {
 		return false
+	}
+}
+
+func CheckNumberType(num string) string {
+	if strings.Contains(num, ".") {
+		return token.FLOAT
+	} else {
+		return token.INTEGER
 	}
 }
