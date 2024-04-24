@@ -187,13 +187,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		}
 
 		// check if type matches TODO - (int & bool are compatible) & (int & float are compatible)
-		if (destType == token.BOOLEAN || destType == token.INTEGER) && (exprType == token.BOOLEAN || exprType == token.INTEGER) {
-			return ReturnType(destType), nil
-		} else if (destType == token.FLOAT || destType == token.INTEGER) && (exprType == token.FLOAT || exprType == token.INTEGER) {
-			return ReturnType(destType), nil
-		} else if destType == token.STRING && exprType == token.STRING {
-			return ReturnType(destType), nil
-		} else {
+		if !CheckTypeCompatibility(string(destType), string(exprType)) {
 			return "", fmt.Errorf("Assignment Statement: Type mismatch")
 		}
 
@@ -304,34 +298,113 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 
 	case *ast.Expression:
 		// a lot to do here
+		// analyze arithmetic operation
+		exprType, err := st.Analyze(node.ArithOp, scope)
+		if err != nil {
+			return "", err
+		} else if exprType != token.INTEGER {
+			return "", fmt.Errorf("Expression: Bitwise And/Or/Not operation must be of type int")
+		}
+
+		// analyze bitwise and/or expression
+		for _, e := range node.AndOrList {
+			andOrType, err := st.Analyze(&e, scope)
+			if err != nil {
+				return "", err
+			} else if andOrType != token.INTEGER {
+				return "", fmt.Errorf("Expression: Bitwise And/Or/Not expression must be of type int")
+			}
+		}
 
 	case *ast.AndOrExpression:
-		// Handle AndOrExpression node
-		// ...
+		// analyze the expression
+		exprType, err := st.Analyze(node.Expression, scope)
+		if err != nil {
+			return "", err
+		} else if exprType != token.INTEGER {
+			return "", fmt.Errorf("Expression: Bitwise And/Or/Not expression must be of type int")
+		}
 
 	case *ast.ArithmeticOperation:
-		// Handle ArithmeticOperation node
-		// ...
+		// analyze the relation
+		relType, err := st.Analyze(node.Relation, scope)
+		if err != nil {
+			return "", err
+		}
+
+		// analyze the arithmetic operation
+		// todo - add concatenation for string
+		for _, e := range node.AddSubList {
+			addSubType, err := st.Analyze(&e, scope)
+			if err != nil {
+				return "", err
+			} else if !CheckTypeCompatibility(string(relType), string(addSubType)) {
+				return "", fmt.Errorf("Artithmetic Expression: Type mismatch")
+			}
+		}
 
 	case *ast.AddSubExpression:
-		// Handle AddSubExpression node
-		// ...
+		// analyze the arithmetic operation
+		exprType, err := st.Analyze(node.ArithmeticOperation, scope)
+		if err != nil {
+			return "", err
+		} else if exprType != token.INTEGER && exprType != token.FLOAT {
+			return "", fmt.Errorf("Expression: Arithmetic operation must be of type int or float")
+		}
 
 	case *ast.Relation:
-		// Handle Relation node
-		// ...
+		// analyze the term
+		termType, err := st.Analyze(node.Term, scope)
+		if err != nil {
+			return "", err
 
+		}
+
+		// analyze the relation
+		// todo - add equality/inequality check for string
+		for _, e := range node.RelationalOperationList {
+			relType, err := st.Analyze(&e, scope)
+			if err != nil {
+				return "", err
+			} else if !CheckTypeCompatibility(string(termType), string(relType)) {
+				return "", fmt.Errorf("Relation Expression: Type mismatch - INTEGER or FLOAT expected")
+			}
+
+		}
 	case *ast.RelationalExpression:
-		// Handle RelationalExpression node
-		// ...
+		// analyze the term
+		relType, err := st.Analyze(node.Relation, scope)
+		if err != nil {
+			return "", err
+		}
+		return relType, nil
 
 	case *ast.Term:
-		// Handle Term node
-		// ...
+		// analyze the factor
+		factorType, err := st.Analyze(node.Factor, scope)
+		if err != nil {
+			return "", err
+		}
+
+		// analyze the multiplication/division expression
+		for _, e := range node.MultDivList {
+			multDivType, err := st.Analyze(&e, scope)
+			if err != nil {
+				return "", err
+			} else if multDivType != token.INTEGER && multDivType != token.FLOAT {
+				return "", fmt.Errorf("Term Expression: Type mismatch - INTEGER or FLOAT expected")
+			}
+		}
+
+		// todo - add case for what type is returned
 
 	case *ast.MultDivExpression:
-		// Handle MultDivExpression node
-		// ...
+		// analyze the factor
+		exprType, err := st.Analyze(node.Factor, scope)
+		if err != nil {
+			return "", err
+		}
+		return exprType, nil
 
 	case *ast.Factor:
 		// Handle Factor node
@@ -384,4 +457,16 @@ func GetLastProcedureName(scope string) string {
 
 	// If no procedure name is found, return an empty string
 	return ""
+}
+
+func CheckTypeCompatibility(t1, t2 string) bool {
+	if (t1 == token.BOOLEAN || t1 == token.INTEGER) && (t2 == token.BOOLEAN || t2 == token.INTEGER) {
+		return true
+	} else if (t1 == token.FLOAT || t1 == token.INTEGER) && (t2 == token.FLOAT || t2 == token.INTEGER) {
+		return true
+		//} else if t1 == token.STRING && t2 == token.STRING {
+		//	return true
+	} else {
+		return false
+	}
 }
