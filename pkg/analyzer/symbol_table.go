@@ -4,14 +4,14 @@ type TokenType string
 type VariableType string
 
 type Symbol struct {
-	Name        string
-	NodeType    string
-	ReturnType  string // for variables it acts as the data type
-	Scope       string
-	IsProcedure bool
-	//ParamList   []string
-	IsArray   bool
-	ArraySize string
+	Name          string
+	NodeType      string
+	ReturnType    string // for variables it acts as the data type
+	Scope         string
+	IsProcedure   bool
+	ParamTypeList []string
+	IsArray       bool
+	ArraySize     string
 	//IsProcedure bool
 	//ParameterList []string
 	//TokenType     string
@@ -33,16 +33,16 @@ func NewSymbolTable() *SymbolTable {
 	}
 }
 
-func NewSymbol(name string, nodeType string, returnType string, scope string, isProcedure bool, isArray bool, arraySize string) Symbol {
+func NewSymbol(name string, nodeType string, returnType string, scope string, isProcedure bool, paramList []string, isArray bool, arraySize string) Symbol {
 	return Symbol{
-		Name:        name,
-		NodeType:    nodeType,
-		ReturnType:  returnType,
-		Scope:       scope,
-		IsProcedure: isProcedure,
-		//ParamList:   paramList,
-		IsArray:   isArray,
-		ArraySize: arraySize,
+		Name:          name,
+		NodeType:      nodeType,
+		ReturnType:    returnType,
+		Scope:         scope,
+		IsProcedure:   isProcedure,
+		ParamTypeList: paramList,
+		IsArray:       isArray,
+		ArraySize:     arraySize,
 	}
 }
 

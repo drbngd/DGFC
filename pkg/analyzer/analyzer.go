@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-const (
-	INT   = "integer"
-	STR   = "string"
-	FLOAT = "float"
-	BOOL  = "bool"
-)
+//const (
+//	INT   = "integer"
+//	STR   = "string"
+//	FLOAT = "float"
+//	BOOL  = "bool"
+//)
 
 type ReturnType string
 
@@ -30,53 +30,48 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 	switch node := node.(type) {
 
 	case *ast.Program:
-		nodeType, err := st.Analyze(node.Header, "GLOBAL")
-		if err != nil {
-			return nodeType, err
-		}
+		st.Analyze(node.Header, "GLOBAL")
+		st.Analyze(node.Body, "GLOBAL")
 
-		nodeType, err = st.Analyze(node.Body, "GLOBAL")
-		if err != nil {
-			return nodeType, err
-		}
+		return "", nil
 
 	case *ast.ProgramHeader:
-		_, err := st.Analyze(node.Identifier, "GLOBAL")
-		if err != nil {
-			return "", err
-		}
+		st.Analyze(node.Identifier, "GLOBAL")
+
+		return "", nil
 
 	case *ast.ProgramBody:
 		// all declarations in Progam Body are global
 		for _, d := range node.Declarations {
-			nodeType, err := st.Analyze(d, "GLOBAL")
-			if err != nil {
-				return nodeType, err
-			}
+			st.Analyze(d, "GLOBAL")
+		}
+		for _, s := range node.Statements {
+			st.Analyze(s, "GLOBAL")
 		}
 
-		for _, s := range node.Statements {
-			nodeType, err := st.Analyze(s, "GLOBAL")
-			if err != nil {
-				return nodeType, err
-			}
-		}
+		return "", nil
 
 	case *ast.ProcedureDeclaration:
-		// get procedure name, return type, scope, and param list
+		// 0: get procedure name, return type, scope, and param list
 		procName := node.Header.Identifier.Name
 		procReturnType := node.Header.Type.Name
 		newScope := scope + "." + procName
 		if node.IsGlobal {
 			newScope = "GLOBAL"
 		}
-		paramList := GetProcedureParams(*node)
+		paramList, paramTypeList := GetProcedureParams(*node)
 
-		// first: add procedure to symbol table
-		sym := NewSymbol(procName, "Procedure", procReturnType, scope, true, false, "0")
+		// 1: check if procedure is already declared
+		_, ok := st.table[procName+".PROC"]
+		if ok {
+			return "", fmt.Errorf("Procedure Declaration: Procedure '%s' already declared", procName)
+		}
+
+		// 2: add procedure to symbol table
+		sym := NewSymbol(procName, "Procedure", procReturnType, scope, true, paramTypeList, false, "0")
 		st.AddSymbol(sym)
 
-		// second: add procedure's params to symbol table
+		// 3: add procedure's params to symbol table
 		for _, p := range paramList {
 			paramName := p.Identifier.Name
 			paramType := p.Type.Name
@@ -84,11 +79,11 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			if p.IsGlobal {
 				return "", fmt.Errorf("Procedure Declaration: Parameters cannot be global")
 			}
-			sym := NewSymbol(paramName, "Procedure Param", paramType, newScope, false, isArray, "0")
+			sym := NewSymbol(paramName, "Procedure Param", paramType, newScope, false, nil, isArray, "0")
 			st.AddSymbol(sym)
 		}
 
-		// third: analyze the header & body
+		// 4: analyze the header & body
 		nodeType, err := st.Analyze(node.Header, newScope)
 		if err != nil {
 			return nodeType, err
@@ -98,404 +93,310 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			return nodeType, err
 		}
 
+		// 5: return the return type of the procedure
+		return ReturnType(procReturnType), nil
+
 	case *ast.ProcedureHeader:
-		_, err := st.Analyze(node.Identifier, scope)
-		if err != nil {
-			return "", err
-		}
+		st.Analyze(node.Identifier, scope)
+
+		return "", nil
 
 	case *ast.ParameterList:
 		for _, p := range node.Parameters {
-			nodeType, err := st.Analyze(&p, scope)
-			if err != nil {
-				return nodeType, err
-			}
+			st.Analyze(&p, scope)
 		}
 
+		return "", nil
+
 	case *ast.Parameter:
-		_, err := st.Analyze(node.VariableDeclaration, scope)
-		if err != nil {
-			return "", err
-		}
+		st.Analyze(node.VariableDeclaration, scope)
+
+		return "", nil
 
 	case *ast.ProcedureBody:
 		for _, d := range node.Declarations {
-			nodeType, err := st.Analyze(d, scope)
-			if err != nil {
-				return nodeType, err
-			}
+			st.Analyze(d, scope)
+		}
+		for _, s := range node.Statements {
+			st.Analyze(s, scope)
 		}
 
-		for _, s := range node.Statements {
-			nodeType, err := st.Analyze(s, scope)
-			if err != nil {
-				return nodeType, err
-			}
-		}
+		return "", nil
 
 	case *ast.VariableDeclaration:
-		// get variable name, type, and scope
-		if node.IsGlobal {
-			scope = "GLOBAL"
-		}
+		// 0: get variable name, type, and scope
 		name := node.Identifier.Name
 		varType := node.Type.Name
 		arrBound := node.Bound.Value.Value
+		if node.IsGlobal {
+			scope = "GLOBAL"
+		}
 
-		// add to symbol table
-		sym := NewSymbol(name, "Variable", varType, scope, false, node.IsArray, arrBound)
+		// 1: check if already exists in the symbol table with the same scope
+		varSym, ok := st.table[name]
+		if ok && varSym.Scope == scope {
+			return "", fmt.Errorf("Variable Declaration: Variable '%s' already declared in the same scope", name)
+		}
+
+		// 2: check that array bound is an integer
+		if node.IsArray {
+			if GetNumberType(arrBound) != token.INTEGER {
+				return "", fmt.Errorf("Variable Declaration: Array bound must be an integer")
+			}
+		}
+
+		// 3: add to symbol table
+		sym := NewSymbol(name, "Variable", varType, scope, false, nil, node.IsArray, arrBound)
 		st.AddSymbol(sym)
 
+		// 4: return the type of the variable
+		return ReturnType(varType), nil
+
 	case *ast.TypeMark:
-		// nothign to handle in TypeMark
+		// 0: get type name
+		typeName := node.Name
+
+		// 1: check if type is valid
+		if typeName != token.INTEGER && typeName != token.FLOAT && typeName != token.BOOLEAN && typeName != token.STRING {
+			return "", fmt.Errorf("TypeMark: Invalid type '%s'", typeName)
+		}
+
+		// 2: return the type
+		return ReturnType(typeName), nil
 
 	case *ast.Bound:
-		// nothing to handle in Bound
+		_, err := st.Analyze(node.Value, scope)
+		if err != nil {
+			return "", err
+		}
+		if GetNumberType(node.Value.Value) != token.INTEGER {
+			return "", fmt.Errorf("Bound: Bound must be an integer")
+		}
+
+		return "", nil
 
 	case *ast.ProcedureCall:
-		// get procedure name
+		// 0: get procedure name
 		procName := node.Identifier.Name
 
-		// get return type of each expression in the procedure call
-		returnTypeList := []string{}
-		for _, e := range node.ArguementList.Arguments {
+		// 1: check if procedure is already declared in the current scope, get return type and param list
+		symObj, ok := st.table[procName+".PROC"]
+		if !ok && !ScopeCompatible(scope, symObj.Scope) {
+			return "", fmt.Errorf("Procedure Call: Procedure '%s' not found in the current scope", procName)
+		}
+		procParamList := symObj.ParamTypeList
+
+		// 2: check if number of arguments match & if argument types match
+		if len(node.ArguementList.Arguments) != len(procParamList) {
+			return "", fmt.Errorf("Procedure Call: Number of arguments do not match")
+		}
+		for i, e := range node.ArguementList.Arguments {
 			nodeType, err := st.Analyze(&e, scope)
 			if err != nil {
 				return nodeType, err
+			} else if nodeType != ReturnType(procParamList[i]) {
+				return "", fmt.Errorf("Procedure Call: Argument type mismatch")
 			}
-			returnTypeList = append(returnTypeList, (string(nodeType)))
 		}
 
-		// check if procedure exists in symbol table & get it's param list
-		procSym, ok := st.table[procName+".PROC"]
-		if !ok {
-			return "", fmt.Errorf("Procedure Call: Procedure declaration not found")
-		} else {
-			// check if number of arguments match
-			if len(returnTypeList) != len(procSym.ParamList) {
-				return "", fmt.Errorf("Procedure Call: Number of arguments do not match")
-			}
-
-			// check if argument types match
-			for i, t := range returnTypeList {
-				if t != procSym.ParamList[i] {
-					return "", fmt.Errorf("Procedure Call: One or more argument types do not match")
-				}
-			}
-
-			// if both tests pass, return the return type of the procedure
-			return ReturnType(procSym.ReturnType), nil
-		}
+		// 3: return the return type of the procedure
+		return ReturnType(symObj.ReturnType), nil
 
 	case *ast.AssignmentStatement:
-		// first analyze destination
+		// assignment stat - type converted to that of destination
+		// bool & int
+		// int & float
+		// 0: analyze destination & expression
 		destType, err := st.Analyze(node.Destination, scope)
 		if err != nil {
 			return "", err
 		}
-
-		//// get destination name
-		//destName := node.Destination.Identifier.Name
-		//
-		//// check if in symbol table - TODO: check if this is necessary
-		//_, ok := st.table[destName]
-		//if !ok {
-		//	return "", fmt.Errorf("Assignment Statement: Destination '%s' not found.", destName)
-		//}
-
-		// analyze expression
 		exprType, err := st.Analyze(node.Expression, scope)
 		if err != nil {
 			return "", err
 		}
 
-		// check if type matches TODO - (int & bool are compatible) & (int & float are compatible)
-		if !CheckTypeCompatibility(string(destType), string(exprType)) {
-			return "", fmt.Errorf("Assignment Statement: Type mismatch")
+		// 1: type check destination & expression
+		if !AssignmentTypeCompatible(string(destType), string(exprType)) {
+			return "", fmt.Errorf("Assignment Statement: Destination & Expression type mismatch")
 		}
 
+		// 2: return "" as no type to be returned
+		return "", nil
+
 	case *ast.Destination:
-		// check if present in symbol table
+		// 0: check if present in symbol table & in current scope, get type
 		destName := node.Identifier.Name
-		_, ok := st.table[destName]
+		symObj, ok := st.table[destName]
 		if !ok {
+			if !ScopeCompatible(scope, symObj.Scope) {
+				return "", fmt.Errorf("Destination: '%s' not in scope", destName)
+			}
 			return "", fmt.Errorf("Destination: '%s' not found in symbol table", destName)
 		}
 		destType := st.table[destName].ReturnType
 
-		// analyze expression
-		exprType, err := st.Analyze(node.Expression, scope)
-		if err != nil {
-			return "", err
-		}
+		// 1: analyze identifier & expression
+		st.Analyze(node.Identifier, scope)
+		exprType, _ := st.Analyze(node.Expression, scope)
 
-		// if expression is an array, check if index is within bounds, and that expression is an integer
+		// 2: if array: check if that expression is an integer, and index is within bounds
 		if node.IsArray {
-			// check if expression is of type integer
-			if exprType != "integer" {
-				return "", fmt.Errorf("Assingment Statement: Array index must be an integer")
+			if exprType != token.INTEGER {
+				return "", fmt.Errorf("Destination: Array index must be an integer")
 			}
-
-			//// TODO - bounds check to be done in Code Generation
-			//// check if index is within bounds
-			//if node.Expression.Bound.Value.Value > node.Expression.ArraySize {
-			//	return "", fmt.Errorf("Destination: Array index out of bounds")
-			//}
+			// TODO(codegen): Bounds checking to be done in code generation
 		}
-
 		return ReturnType(destType), nil
 
 	case *ast.IfStatement:
+		// 0: generate new scope string & increment if/else count
 		newScope := scope + ".IF." + string(st.IfElseCount)
 		st.IfElseEncountered()
 
-		// analyze condition
-		condType, err := st.Analyze(node.Condition, scope)
-		if err != nil {
-			return "", err
-		}
-		// check if condition is of type bool or int
-		if condType != token.BOOLEAN && condType != token.INTEGER {
-			return "", fmt.Errorf("If Statement: Condition must be of type bool or int")
+		// 1:  analyze condition & type check
+		condType, _ := st.Analyze(node.Condition, scope)
+		if !(condType == token.BOOLEAN || condType == token.INTEGER) {
+			return "", fmt.Errorf("If Statement: Condition must be of type bool (or int)")
 		}
 
-		// analyze then block -> use new scope
+		// 2: analyze then block -> use new scope
 		for _, s := range node.ThenBlock {
-			_, err := st.Analyze(s, newScope+".THEN")
-			if err != nil {
-				return "", err
-			}
+			st.Analyze(s, newScope+".THEN")
 		}
 
-		// analyze else block
+		// 3: analyze else block
 		for _, s := range node.ElseBlock {
-			_, err := st.Analyze(s, newScope+".ELSE")
-			if err != nil {
-				return "", err
-			}
+			st.Analyze(s, newScope+".ELSE")
 		}
+
+		return "", nil
 
 	case *ast.LoopStatement:
+		// 0: generate new scope string & increment for loop count
 		newScope := scope + ".LOOP." + string(st.ForLoopCount)
 		st.ForLoopEncountered()
 
-		// analyze initialization statement
-		_, err := st.Analyze(node.Initialization, scope)
-		if err != nil {
-			return "", err
+		// 1: analyze initialization statement
+		st.Analyze(node.Initialization, scope)
+
+		// 2: analyze condition statement & type check
+		condType, _ := st.Analyze(node.Condition, scope)
+		if !(condType == token.BOOLEAN || condType == token.INTEGER) {
+			return "", fmt.Errorf("Loop Statement: Condition must be of type bool (or int)")
 		}
 
-		// analyze condition statement
-		condType, err := st.Analyze(node.Condition, scope)
-		if err != nil {
-			return "", err
-		}
-		// check if condition is of type bool or int
-		if condType != token.BOOLEAN && condType != token.INTEGER {
-			return "", fmt.Errorf("Loop Statement: Condition must be of type bool or int")
-		}
-
-		// analyze body
+		// 3: analyze body
 		for _, s := range node.Body {
-			_, err := st.Analyze(s, newScope)
-			if err != nil {
-				return "", err
-			}
+			st.Analyze(s, newScope)
 		}
+
+		return "", nil
 
 	case *ast.ReturnStatement:
-		// analyze expression
-		exprType, err := st.Analyze(node.Expression, scope)
-		if err != nil {
-			return "", err
+		// 0: analyze expression
+		exprType, _ := st.Analyze(node.Expression, scope)
+
+		// 1: type check return expression & procedure return type
+		assocProcName := GetLastProcedureName(scope)
+		symObj, ok := st.table[assocProcName+".PROC"]
+		if !ok {
+			return "", fmt.Errorf("Return Statement: Parent Procedure not found")
 		}
 
-		// need to check if return type matches procedure return type
-		requiredReturnType := GetLastProcedureName(scope)
-		if string(exprType) != requiredReturnType {
-			return "", fmt.Errorf("Return Statement: Return type does not match procedure return type")
+		if string(exprType) != symObj.ReturnType {
+			return "", fmt.Errorf("Return Statement: Return type does not match parent procedure return type")
 		}
+
+		// 2: return "" as no type to be returned
+		return "", nil
 
 	case *ast.Identifier:
-		// nothing to do here
+		return "", nil
 
 	case *ast.Expression:
-		// a lot to do here
-		// analyze arithmetic operation
-		exprType, err := st.Analyze(node.ArithOp, scope)
-		if err != nil {
-			return "", err
-		} else if exprType != token.INTEGER {
-			return "", fmt.Errorf("Expression: Bitwise And/Or/Not operation must be of type int")
+		// 0: analyze arithmetic operation & type check
+		arithopType, _ := st.Analyze(node.ArithOp, scope)
+		// if no operation is present and no list of expressions is present, then type doesn't matter
+		if !node.IsNot && len(node.AndOrList) == 0 {
+			return "", nil
 		}
 
-		// analyze bitwise and/or expression
-		for _, e := range node.AndOrList {
-			andOrType, err := st.Analyze(&e, scope)
-			if err != nil {
-				return "", err
-			} else if andOrType != token.INTEGER {
-				return "", fmt.Errorf("Expression: Bitwise And/Or/Not expression must be of type int")
-			}
+		if arithopType != token.INTEGER || arithopType != token.FLOAT {
+			return "", fmt.Errorf("Expression: Bitwise operations must be of type int (or float)")
 		}
+		// TODO(codegen): if type is float, we will truncate it to int in code generation
+
+		// 1: analyze AndOr list expression & type check for int
+		for _, e := range node.AndOrList {
+			st.Analyze(&e, scope)
+		}
+
+		return "", nil
 
 	case *ast.AndOrExpression:
-		// analyze the expression
-		exprType, err := st.Analyze(node.Expression, scope)
-		if err != nil {
-			return "", err
-		} else if exprType != token.INTEGER {
-			return "", fmt.Errorf("Expression: Bitwise And/Or/Not expression must be of type int")
+		// 0: analyze the expression & type check
+		exprType, _ := st.Analyze(node.Expression, scope)
+		if exprType != token.INTEGER || exprType != token.FLOAT {
+			return "", fmt.Errorf("Expression: Bitwise And/Or/Not expression must be of type int (or float)")
 		}
+
+		// TODO(codegen): if type is float, we will truncate it to int in code generation
+
+		return "", nil
 
 	case *ast.ArithmeticOperation:
-		// analyze the relation
-		relType, err := st.Analyze(node.Relation, scope)
-		if err != nil {
-			return "", err
-		}
-
-		// analyze the arithmetic operation
-		// todo - add concatenation for string
-		for _, e := range node.AddSubList {
-			addSubType, err := st.Analyze(&e, scope)
-			if err != nil {
-				return "", err
-			} else if !CheckTypeCompatibility(string(relType), string(addSubType)) {
-				return "", fmt.Errorf("Artithmetic Expression: Type mismatch")
-			}
-		}
 
 	case *ast.AddSubExpression:
-		// analyze the arithmetic operation
-		exprType, err := st.Analyze(node.ArithmeticOperation, scope)
-		if err != nil {
-			return "", err
-		} else if exprType != token.INTEGER && exprType != token.FLOAT {
-			return "", fmt.Errorf("Expression: Arithmetic operation must be of type int or float")
-		}
 
 	case *ast.Relation:
-		// analyze the term
-		termType, err := st.Analyze(node.Term, scope)
-		if err != nil {
-			return "", err
 
-		}
-
-		// analyze the relation
-		// todo - add equality/inequality check for string
-		for _, e := range node.RelationalOperationList {
-			relType, err := st.Analyze(&e, scope)
-			if err != nil {
-				return "", err
-			} else if !CheckTypeCompatibility(string(termType), string(relType)) {
-				return "", fmt.Errorf("Relation Expression: Type mismatch - INTEGER or FLOAT expected")
-			}
-
-		}
 	case *ast.RelationalExpression:
-		// analyze the term
-		relType, err := st.Analyze(node.Term, scope)
-		if err != nil {
-			return "", err
-		}
-		return relType, nil
 
 	case *ast.Term:
-		// analyze the factor
-		_, err := st.Analyze(node.Factor, scope)
-		if err != nil {
-			return "", err
-		}
-
-		// analyze the multiplication/division expression
-		for _, e := range node.MultDivList {
-			multDivType, err := st.Analyze(&e, scope)
-			if err != nil {
-				return "", err
-			} else if multDivType != token.INTEGER && multDivType != token.FLOAT {
-				return "", fmt.Errorf("Term Expression: Type mismatch - INTEGER or FLOAT expected")
-			}
-		}
-
-		// todo - add case for what type is returned
 
 	case *ast.MultDivExpression:
-		// analyze the factor
-		exprType, err := st.Analyze(node.Factor, scope)
-		if err != nil {
-			return "", err
-		}
-		return exprType, nil
 
 	case *ast.Factor:
-		// analyze the expression
-		if node.IsExpression {
-			_, err := st.Analyze(node.Expression, scope)
-			if err != nil {
-				return "", err
-			}
-		} else if node.IsProcedureCall {
-			_, err := st.Analyze(node.ProcedureCall, scope)
-			if err != nil {
-				return "", err
-			}
-		} else if node.IsNumber {
-			_, err := st.Analyze(node.Number, scope)
-			if err != nil {
-				return "", err
-			} else {
-				// code to return type of number
-			}
-		} else if node.IsString {
-			_, err := st.Analyze(node.String, scope)
-			if err != nil {
-				return "", err
-			} else {
-				return token.STR, nil
-			}
-		} else if node.IsName {
-			_, err := st.Analyze(node.Name, scope)
-			if err != nil {
-				return "", err
-			}
-		}
 
 	case *ast.Name:
-		// check if present in symbol table & if it is array does the symbol has the record of being an array
-		isArray := node.IsArray
+		// 0: get name, check if in symbol table, in scope, and if it is an array
 		name := node.Identifier.Name
-
-		// check if present in symbol table and if it is an array
-		_, ok := st.table[name]
+		symObj, ok := st.table[name]
 		if !ok {
 			return "", fmt.Errorf("Name: '%s' not found in symbol table", name)
-		} else if isArray && !st.table[name].IsArray {
-			return "", fmt.Errorf("Name: '%s' is not an array", name)
+		} else {
+			if !ScopeCompatible(scope, symObj.Scope) {
+				return "", fmt.Errorf("Name: '%s' not in scope", name)
+			}
+			if node.IsArray && !symObj.IsArray {
+				return "", fmt.Errorf("Name: '%s' is not an array", name)
+			}
+			if !node.IsArray && symObj.IsArray {
+				return "", fmt.Errorf("Name: '%s' is an array", name)
+			}
 		}
 
-		// check if expression is an int value
-		exprType, err := st.Analyze(node.Expression, scope)
-		if err != nil {
-			return "", err
-		} else if exprType != token.INTEGER {
+		// 1: analyze identifier & expression
+		st.Analyze(node.Identifier, scope)
+		exprType, _ := st.Analyze(node.Expression, scope)
+		if exprType != token.INTEGER {
 			return "", fmt.Errorf("Name: Array index must be an integer")
 		}
 
-		return ReturnType(st.table[name].ReturnType), nil
+		// 2: return the type of the name
+		return ReturnType(symObj.ReturnType), nil
 
 	case *ast.ArgumentList:
 		for _, a := range node.Arguments {
-			_, err := st.Analyze(&a, scope)
-			if err != nil {
-				return "", err
-			}
+			st.Analyze(&a, scope)
 		}
+
+		return "", nil
 
 	case *ast.Number:
 		num := node.Value
-		return ReturnType(CheckNumberType(num)), nil
+		return ReturnType(GetNumberType(num)), nil
 
 	case *ast.String:
 		return token.STR, nil
@@ -508,13 +409,15 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 	return "", nil
 }
 
-func GetProcedureParams(pd ast.ProcedureDeclaration) []ast.VariableDeclaration {
+func GetProcedureParams(pd ast.ProcedureDeclaration) ([]ast.VariableDeclaration, []string) {
 	params := []ast.VariableDeclaration{}
+	paramsType := []string{}
 
 	for _, p := range pd.Header.ParameterList.Parameters {
 		params = append(params, *p.VariableDeclaration)
+		paramsType = append(paramsType, p.VariableDeclaration.Type.Name)
 	}
-	return params
+	return params, paramsType
 }
 
 // TODO - need to test is
@@ -522,6 +425,7 @@ func GetLastProcedureName(scope string) string {
 	// Split the scope string by the period character
 	elements := strings.Split(scope, ".")
 
+	// todo - search for procedure with following naming convention: <name>-PROC
 	// Iterate over the elements in reverse order
 	for i := len(elements) - 1; i >= 0; i-- {
 		// If the element is not a keyword (GLOBAL, IF, LOOP, ELSE), return it
@@ -534,7 +438,7 @@ func GetLastProcedureName(scope string) string {
 	return ""
 }
 
-func CheckTypeCompatibility(t1, t2 string) bool {
+func TypeCompatible(t1, t2 string) bool {
 	if (t1 == token.BOOLEAN || t1 == token.INTEGER) && (t2 == token.BOOLEAN || t2 == token.INTEGER) {
 		return true
 	} else if (t1 == token.FLOAT || t1 == token.INTEGER) && (t2 == token.FLOAT || t2 == token.INTEGER) {
@@ -546,10 +450,81 @@ func CheckTypeCompatibility(t1, t2 string) bool {
 	}
 }
 
-func CheckNumberType(num string) string {
+func GetNumberType(num string) string {
 	if strings.Contains(num, ".") {
 		return token.FLOAT
 	} else {
 		return token.INTEGER
 	}
 }
+
+func ScopeCompatible(currScope, symbolScope string) bool {
+	return strings.HasPrefix(symbolScope, currScope)
+}
+
+func AssignmentTypeCompatible(destType, exprType string) bool {
+	// If the types are the same, they are compatible
+	if destType == exprType {
+		return true
+	}
+	if (destType == token.BOOLEAN || destType == token.INTEGER) && (exprType == token.BOOLEAN || exprType == token.INTEGER) {
+		return true
+	}
+	if (destType == token.FLOAT || destType == token.INTEGER) && (exprType == token.INTEGER || exprType == token.FLOAT) {
+		return true
+	}
+
+	return false
+}
+
+func ArithmeticTypeCompatible(op, type1, type2 string) bool {
+	// If either of types are int or float, they are compatible
+	if (type1 == token.INTEGER || type1 == token.FLOAT) && (type2 == token.INTEGER || type2 == token.FLOAT) {
+		return true
+	}
+	// If the operation is addition and both types are strings, they are compatible
+	if op == "+" && type1 == token.STR && type2 == token.STR {
+		return true
+	}
+	// In all other cases, the types are not compatible
+	return false
+}
+
+func BitwiseTypeCompatible(op, type1, type2 string) bool {
+	// If the operation is bitwise & | not and both types are int, they are compatible
+	if (op == "&" || op == "|" || op == "not") && type1 == token.INTEGER && type2 == token.INTEGER {
+		return true
+	}
+	// In all other cases, the types are not compatible
+	return false
+}
+
+func RelationTypeCompatible(op, type1, type2 string) bool {
+	// If the types are int or bool, they are compatible
+	if (type1 == token.INTEGER || type1 == token.BOOLEAN) && (type2 == token.INTEGER || type2 == token.BOOLEAN) {
+		return true
+	}
+	// If both types are float, they are compatible
+	if type1 == token.FLOAT && type2 == token.FLOAT {
+		return true
+	}
+	// If the operation is == or !=, the types are compatible
+	if (op == "==" || op == "!=") && type1 == token.STR && type2 == token.STR {
+		return true
+	}
+	// In all other cases, the types are not compatible
+	return false
+}
+
+// todo - expr type - type must match
+// arithmetic operation + - * / - int & float are compatible
+// + - allows strings as well
+// relation - int (converted to bool) & bool are compatible, float & float are compatible
+// == , != - strings also allowed
+// bitwise - & | not - only int type
+
+// assignment stat - type converted to that of destination
+// bool & int
+// int & float
+
+// If & For expression(condition) - bool type, int is cast to bool
