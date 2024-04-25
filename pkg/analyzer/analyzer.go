@@ -30,17 +30,20 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 	switch node := node.(type) {
 
 	case *ast.Program:
+		print("Analyzing Program\n")
 		st.Analyze(node.Header, "GLOBAL")
 		st.Analyze(node.Body, "GLOBAL")
 
 		return "", nil
 
 	case *ast.ProgramHeader:
+		print("Analyzing Program Header\n")
 		st.Analyze(node.Identifier, "GLOBAL")
 
 		return "", nil
 
 	case *ast.ProgramBody:
+		print("Analyzing Program Body\n")
 		// all declarations in Progam Body are global
 		for _, d := range node.Declarations {
 			st.Analyze(d, "GLOBAL")
@@ -52,24 +55,38 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return "", nil
 
 	case *ast.ProcedureDeclaration:
+		print("Analyzing Procedure Declaration\n")
 		// 0: get procedure name, return type, scope, and param list
 		procName := node.Header.Identifier.Name
 		procReturnType := node.Header.Type.Name
+
 		newScope := scope + "." + procName
 		if node.IsGlobal {
-			newScope = "GLOBAL"
+			newScope = "GLOBAL" + "." + procName
+			print(newScope)
+			print("\n")
 		}
+		print("\n")
+		print(newScope)
+		print("\n")
+		print(node.IsGlobal)
+		print("\n")
+
 		paramList, paramTypeList := GetProcedureParams(*node)
 
 		// 1: check if procedure is already declared
-		_, ok := st.table[procName+".PROC"]
+		_, ok := st.ProcedureExists(procName, newScope)
 		if ok {
-			return "", fmt.Errorf("Procedure Declaration: Procedure '%s' already declared", procName)
+			return "", fmt.Errorf("Procedure Declaration: Procedure '%s' already declared in the current scope", procName)
 		}
+		hashKey := st.GetProcedureKey(procName, newScope)
+		//if ok && SameIndex(symObj.Index, st.GetIndex()) && InSameScope(symObj.Scope, scope) {
+		//	return "", fmt.Errorf("Procedure Declaration: Procedure '%s' already declared in the same scope", procName)
+		//}
 
 		// 2: add procedure to symbol table
-		sym := NewSymbol(procName, "Procedure", procReturnType, scope, true, paramTypeList, false, "0")
-		st.AddSymbol(sym)
+		sym := st.NewSymbol(procName, "Procedure", procReturnType, scope, true, paramTypeList, false, "0")
+		st.table[procName+hashKey+".PROC"] = sym
 
 		// 3: add procedure's params to symbol table
 		for _, p := range paramList {
@@ -79,8 +96,9 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			if p.IsGlobal {
 				return "", fmt.Errorf("Procedure Declaration: Parameters cannot be global")
 			}
-			sym := NewSymbol(paramName, "Procedure Param", paramType, newScope, false, nil, isArray, "0")
+			sym := st.NewSymbol(paramName, "Procedure Param", paramType, newScope, false, nil, isArray, "0")
 			st.AddSymbol(sym)
+			st.IncrementIndex()
 		}
 
 		// 4: analyze the header & body
@@ -97,11 +115,13 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return ReturnType(procReturnType), nil
 
 	case *ast.ProcedureHeader:
+		print("Analyzing Procedure Header\n")
 		st.Analyze(node.Identifier, scope)
 
 		return "", nil
 
 	case *ast.ParameterList:
+		print("Analyzing Parameter List\n")
 		for _, p := range node.Parameters {
 			st.Analyze(&p, scope)
 		}
@@ -109,11 +129,13 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return "", nil
 
 	case *ast.Parameter:
+		print("Analyzing Parameter\n")
 		st.Analyze(node.VariableDeclaration, scope)
 
 		return "", nil
 
 	case *ast.ProcedureBody:
+		print("Analyzing Procedure Body\n")
 		for _, d := range node.Declarations {
 			st.Analyze(d, scope)
 		}
@@ -124,35 +146,46 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return "", nil
 
 	case *ast.VariableDeclaration:
+		print("Analyzing Variable Declaration\n")
+
+		print("on step 0\n")
 		// 0: get variable name, type, and scope
-		name := node.Identifier.Name
-		varType := node.Type.Name
-		arrBound := node.Bound.Value.Value
-		if node.IsGlobal {
-			scope = "GLOBAL"
-		}
-
-		// 1: check if already exists in the symbol table with the same scope
-		varSym, ok := st.table[name]
-		if ok && varSym.Scope == scope {
-			return "", fmt.Errorf("Variable Declaration: Variable '%s' already declared in the same scope", name)
-		}
-
-		// 2: check that array bound is an integer
+		name := &node.Identifier.Name
+		print(*name)
+		print("\non step 0.1\n")
+		varType := &node.Type.Name
+		print("on step 0.2\n")
+		arrBound := "0"
 		if node.IsArray {
+			arrBound = node.Bound.Value.Value
 			if GetNumberType(arrBound) != token.INTEGER {
 				return "", fmt.Errorf("Variable Declaration: Array bound must be an integer")
 			}
 		}
+		print("on step 0.3\n")
+		newScope := scope
+		if node.IsGlobal {
+			newScope = "GLOBAL"
+		}
 
-		// 3: add to symbol table
-		sym := NewSymbol(name, "Variable", varType, scope, false, nil, node.IsArray, arrBound)
+		print("on step 1\n")
+		// 1: check if already exists in the symbol table with the same scope
+		varSym, ok := st.table[*name]
+		if ok && ScopeCompatible(newScope, varSym.Scope) && SameIndex(varSym.Index, st.GetIndex()) {
+			return "", fmt.Errorf("Variable Declaration: Variable '%s' already declared in the same scope", name)
+		}
+
+		print("on step 2\n")
+		// 2: add to symbol table
+		sym := st.NewSymbol(*name, "Variable", *varType, newScope, false, nil, node.IsArray, arrBound)
 		st.AddSymbol(sym)
 
-		// 4: return the type of the variable
-		return ReturnType(varType), nil
+		print("on step 3\n")
+		// 3: return the type of the variable
+		return ReturnType(*varType), nil
 
 	case *ast.TypeMark:
+		print("Analyzing TypeMark\n")
 		// 0: get type name
 		typeName := node.Name
 
@@ -165,6 +198,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return ReturnType(typeName), nil
 
 	case *ast.Bound:
+		print("Analyzing Bound\n")
 		_, err := st.Analyze(node.Value, scope)
 		if err != nil {
 			return "", err
@@ -176,13 +210,18 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return "", nil
 
 	case *ast.ProcedureCall:
+		print("Analyzing Procedure Call\n")
 		// 0: get procedure name
 		procName := node.Identifier.Name
 
 		// 1: check if procedure is already declared in the current scope, get return type and param list
 		symObj, ok := st.table[procName+".PROC"]
-		if !ok && !ScopeCompatible(scope, symObj.Scope) {
-			return "", fmt.Errorf("Procedure Call: Procedure '%s' not found in the current scope", procName)
+		if !ok {
+			return "", fmt.Errorf("Procedure Call: Procedure '%s' not found in symbol table", procName)
+		} else {
+			if !ScopeCompatible(scope, symObj.Scope) {
+				return "", fmt.Errorf("Procedure Call: Procedure '%s' not in scope", procName)
+			}
 		}
 		procParamList := symObj.ParamTypeList
 
@@ -203,6 +242,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return ReturnType(symObj.ReturnType), nil
 
 	case *ast.AssignmentStatement:
+		print("Analyzing Assignment Statement\n")
 		// assignment stat - type converted to that of destination
 		// bool & int
 		// int & float
@@ -225,14 +265,16 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return "", nil
 
 	case *ast.Destination:
+		print("Analyzing Destination\n")
 		// 0: check if present in symbol table & in current scope, get type
 		destName := node.Identifier.Name
 		symObj, ok := st.table[destName]
 		if !ok {
+			return "", fmt.Errorf("Destination: '%s' not found in symbol table", destName)
+		} else {
 			if !ScopeCompatible(scope, symObj.Scope) {
 				return "", fmt.Errorf("Destination: '%s' not in scope", destName)
 			}
-			return "", fmt.Errorf("Destination: '%s' not found in symbol table", destName)
 		}
 		destType := st.table[destName].ReturnType
 
@@ -250,8 +292,9 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return ReturnType(destType), nil
 
 	case *ast.IfStatement:
+		print("Analyzing If Statement\n")
 		// 0: generate new scope string & increment if/else count
-		newScope := scope + ".IF." + string(st.IfElseCount)
+		newScope := scope + ".IF."
 		st.IfElseEncountered()
 
 		// 1:  analyze condition & type check
@@ -273,8 +316,9 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return "", nil
 
 	case *ast.LoopStatement:
+		print("Analyzing Loop Statement\n")
 		// 0: generate new scope string & increment for loop count
-		newScope := scope + ".LOOP." + string(st.ForLoopCount)
+		newScope := scope + ".LOOP."
 		st.ForLoopEncountered()
 
 		// 1: analyze initialization statement
@@ -294,6 +338,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return "", nil
 
 	case *ast.ReturnStatement:
+		print("Analyzing Return Statement\n")
 		// 0: analyze expression
 		exprType, _ := st.Analyze(node.Expression, scope)
 
@@ -312,22 +357,38 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return "", nil
 
 	case *ast.Identifier:
+		print("Analyzing Identifier\n")
+		// maybe there is more to do here
 		return "", nil
 
 	case *ast.Expression:
+		print("Analyzing Expression\n")
+		print("on step 0\n")
+		if node == nil {
+			print("Expression: nil\n")
+			return "", nil
+		}
+
+		if node.ArithOp == nil {
+			print("ArithOp: nil\n")
+			//return "", nil
+		}
 		// 0: analyze arithmetic operation & type check
 		arithopType, _ := st.Analyze(node.ArithOp, scope)
 		// if not isn't present and no list of bitwise and/or expressions is present, then type doesn't matter
+		print("on step 0.1\n")
 		if !node.IsNot && len(node.AndOrList) == 0 {
 			return arithopType, nil
 		}
 
+		print("on step 1\n")
 		// 1: if an bitwise and/or/not list is present, then arithmetic operation must be of type int
 		if arithopType != token.INTEGER {
 			return "", fmt.Errorf("Expression: Bitwise operations must be of type int")
 		}
 		// TODO(codegen): if type is float, we will truncate it to int in code generation
 
+		print("on step 2\n")
 		// 2: analyze AndOr list expression & type check for int
 		for _, e := range node.AndOrList {
 			st.Analyze(&e, scope)
@@ -336,6 +397,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return ReturnType(token.INTEGER), nil
 
 	case *ast.AndOrExpression:
+		print("Analyzing AndOr Expression\n")
 		exprType, _ := st.Analyze(node.Expression, scope)
 		if exprType != token.INTEGER {
 			return "", fmt.Errorf("Bitwise Expression: Expression must be of type int")
@@ -343,6 +405,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return token.INTEGER, nil
 
 	case *ast.ArithmeticOperation:
+		print("Analyzing Arithmetic Operation\n")
 		// 0: analyze relation & type check
 		relType, _ := st.Analyze(node.Relation, scope)
 		arithopReturnType := relType
@@ -368,6 +431,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return arithopReturnType, nil
 
 	case *ast.AddSubExpression:
+		print("Analyzing AddSub Expression\n")
 		exprType, _ := st.Analyze(node.ArithmeticOperation, scope)
 		if exprType != token.INTEGER && exprType != token.FLOAT {
 			return "", fmt.Errorf("AddSub Expression: Arithmetic Operation must be of type int or float")
@@ -375,6 +439,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return exprType, nil
 
 	case *ast.Relation:
+		print("Analyzing Relation\n")
 		// float - float, int | bool with int | bool, string with string
 		// 0: analyze the term
 		termType, _ := st.Analyze(node.Term, scope)
@@ -398,6 +463,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return token.BOOLEAN, nil
 
 	case *ast.RelationalExpression:
+		print("Analyzing Relational Expression\n")
 		// 0: analyze the relation
 		relType, _ := st.Analyze(node.Term, scope)
 		// strings can only be used with == and !=
@@ -407,6 +473,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return relType, nil
 
 	case *ast.Term:
+		print("Analyzing Term\n")
 		// 0: analyze the factor
 		factorType, _ := st.Analyze(node.Factor, scope)
 		termReturnType := factorType
@@ -432,6 +499,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return termReturnType, nil
 
 	case *ast.MultDivExpression:
+		print("Analyzing MultDiv Expression\n")
 		// 0: analuze mult, div term
 		termType, _ := st.Analyze(node.Factor, scope)
 		if termType != token.INTEGER && termType != token.FLOAT {
@@ -440,6 +508,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return termType, nil
 
 	case *ast.Factor:
+		print("Analyzing Factor\n")
 		if node.IsExpression {
 			exprType, _ := st.Analyze(node.Expression, scope)
 			return exprType, nil
@@ -474,6 +543,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return "", nil
 
 	case *ast.Name:
+		print("Analyzing Name\n")
 		// 0: get name, check if in symbol table, in scope, and if it is an array
 		name := node.Identifier.Name
 		symObj, ok := st.table[name]
@@ -502,6 +572,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return ReturnType(symObj.ReturnType), nil
 
 	case *ast.ArgumentList:
+		print("Analyzing Argument List\n")
 		for _, a := range node.Arguments {
 			st.Analyze(&a, scope)
 		}
@@ -509,13 +580,16 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		return "", nil
 
 	case *ast.Number:
+		print("Analyzing Number\n")
 		num := node.Value
 		return ReturnType(GetNumberType(num)), nil
 
 	case *ast.String:
+		print("Analyzing String\n")
 		return token.STR, nil
 
 	default:
+		print("Analyzing Default\n")
 		// Handle unhandled types
 		// ...
 	}
@@ -570,6 +644,14 @@ func GetNumberType(num string) string {
 	} else {
 		return token.INTEGER
 	}
+}
+
+func SameIndex(ind1, ind2 int) bool {
+	return ind1 == ind2
+}
+
+func InSameScope(scope1, scope2 string) bool {
+	return scope1 == scope2
 }
 
 func ScopeCompatible(currScope, symbolScope string) bool {
@@ -628,6 +710,47 @@ func RelationTypeCompatible(op, type1, type2 string) bool {
 	}
 	// In all other cases, the types are not compatible
 	return false
+}
+
+func (st *SymbolTable) GetProcedureKey(name, scope string) string {
+	symObj, ok := st.table[name+".PROC"]
+	if ok && ScopeCompatible(symObj.Scope, scope) {
+		count := CountOccurrences(scope, name)
+		hashKey := strings.Repeat(".PROC", count)
+		return hashKey
+	} else {
+		return ""
+	}
+}
+
+func CountOccurrences(scope, name string) int {
+	// Split the scope string by the period character
+	elements := strings.Split(scope, ".")
+
+	// Initialize a counter
+	count := 0
+
+	// Iterate over the elements
+	for _, element := range elements {
+		// If the element matches the name, increment the counter
+		if element == name {
+			count++
+		}
+	}
+
+	// Return the count
+	return count
+}
+
+func (st *SymbolTable) ProcedureExists(name, scope string) (string, bool) {
+	// get count
+	count := CountOccurrences(scope, name)
+	key := strings.Repeat(".PROC", count)
+	_, ok := st.table[name+key+".PROC"]
+	if ok {
+		return key, true
+	}
+	return key, false
 }
 
 // todo - expr type - type must match

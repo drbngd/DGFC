@@ -1,5 +1,12 @@
 package analyzer
 
+import (
+	"fmt"
+	"os"
+	"sort"
+	"text/tabwriter"
+)
+
 type TokenType string
 type VariableType string
 
@@ -12,6 +19,7 @@ type Symbol struct {
 	ParamTypeList []string
 	IsArray       bool
 	ArraySize     string
+	Index         int
 	//IsProcedure bool
 	//ParameterList []string
 	//TokenType     string
@@ -21,6 +29,7 @@ type Symbol struct {
 
 type SymbolTable struct {
 	table        map[string]Symbol
+	index        int
 	IfElseCount  int
 	ForLoopCount int
 }
@@ -28,12 +37,13 @@ type SymbolTable struct {
 func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{
 		table:        make(map[string]Symbol),
+		index:        0,
 		IfElseCount:  0,
 		ForLoopCount: 0,
 	}
 }
 
-func NewSymbol(name string, nodeType string, returnType string, scope string, isProcedure bool, paramList []string, isArray bool, arraySize string) Symbol {
+func (st *SymbolTable) NewSymbol(name string, nodeType string, returnType string, scope string, isProcedure bool, paramList []string, isArray bool, arraySize string) Symbol {
 	return Symbol{
 		Name:          name,
 		NodeType:      nodeType,
@@ -43,27 +53,30 @@ func NewSymbol(name string, nodeType string, returnType string, scope string, is
 		ParamTypeList: paramList,
 		IsArray:       isArray,
 		ArraySize:     arraySize,
+		Index:         st.GetIndex(),
 	}
 }
 
 func (st *SymbolTable) AddSymbol(s Symbol) (bool, Symbol) {
 	// CASE: if symbol is a procedure, use a different key: s.Name + ".PROC"
+	st.IncrementIndex()
 	if s.IsProcedure {
-		if _, ok := st.table[s.Name+".PROC"]; ok {
-			return ok, s
-		} else {
-			st.table[s.Name+".PROC"] = s
-			return true, s
-		}
+		st.table[s.Name+".PROC"] = s
+		return true, s
 		// CASE: normal non procedure symbol
 	} else {
-		if _, ok := st.table[s.Name]; ok {
-			return false, s
-		} else {
-			st.table[s.Name] = s
-			return true, s
-		}
+		st.table[s.Name] = s
+		return true, s
 	}
+}
+
+func (st *SymbolTable) IncrementIndex() {
+	st.index++
+}
+
+func (st *SymbolTable) GetIndex() int {
+	return st.index
+
 }
 
 func (st *SymbolTable) IfElseEncountered() {
@@ -74,13 +87,23 @@ func (st *SymbolTable) ForLoopEncountered() {
 	st.ForLoopCount++
 }
 
-//func (st *SymbolTable) PrintTable() {
-//	fmt.Println("Symbol Table:")
-//	fmt.Println("-----------------------------------------------------------------------------")
-//	fmt.Printf("%-15s %-15s %-15s %-15s %-15s %-10s %-10s %-10s %-10s\n", "Name", "NodeType", "DataType", "ReturnType", "Scope", "IsProcedure", "ParamList", "IsArray", "ArraySize")
-//	fmt.Println("-----------------------------------------------------------------------------")
-//	for _, symbol := range st.table {
-//		fmt.Printf("%-15s %-15v %-15s %-15s %-15s %-10v %-10v %-10v %-10d\n", symbol.Name, symbol.NodeType, symbol.DataType, symbol.ReturnType, symbol.Scope, symbol.IsProcedure, symbol.ParamList, symbol.IsArray, symbol.ArraySize)
-//	}
-//	fmt.Println("-----------------------------------------------------------------------------")
-//}
+func (st *SymbolTable) PrintSymbolTable() {
+	// Convert the map to a slice of keys for sorting
+	keys := make([]string, 0, len(st.table))
+	for key := range st.table {
+		keys = append(keys, key)
+	}
+
+	// Sort the keys by the index of their corresponding symbols
+	sort.Slice(keys, func(i, j int) bool {
+		return st.table[keys[i]].Index < st.table[keys[j]].Index
+	})
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', tabwriter.AlignRight|tabwriter.Debug)
+	fmt.Fprintln(w, "Index\tKey\tName\tNodeType\tReturnType\tScope\tIsProcedure\tParamTypeList\tIsArray\tArraySize\t")
+	for _, key := range keys {
+		value := st.table[key]
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\t%v\t%v\t%v\t%s\t\n", value.Index, key, value.Name, value.NodeType, value.ReturnType, value.Scope, value.IsProcedure, value.ParamTypeList, value.IsArray, value.ArraySize)
+	}
+	w.Flush()
+}
