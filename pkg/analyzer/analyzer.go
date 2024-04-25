@@ -317,47 +317,161 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 	case *ast.Expression:
 		// 0: analyze arithmetic operation & type check
 		arithopType, _ := st.Analyze(node.ArithOp, scope)
-		// if no operation is present and no list of expressions is present, then type doesn't matter
+		// if not isn't present and no list of bitwise and/or expressions is present, then type doesn't matter
 		if !node.IsNot && len(node.AndOrList) == 0 {
-			return "", nil
+			return arithopType, nil
 		}
 
-		if arithopType != token.INTEGER || arithopType != token.FLOAT {
-			return "", fmt.Errorf("Expression: Bitwise operations must be of type int (or float)")
+		// 1: if an bitwise and/or/not list is present, then arithmetic operation must be of type int
+		if arithopType != token.INTEGER {
+			return "", fmt.Errorf("Expression: Bitwise operations must be of type int")
 		}
 		// TODO(codegen): if type is float, we will truncate it to int in code generation
 
-		// 1: analyze AndOr list expression & type check for int
+		// 2: analyze AndOr list expression & type check for int
 		for _, e := range node.AndOrList {
 			st.Analyze(&e, scope)
 		}
 
-		return "", nil
+		return ReturnType(token.INTEGER), nil
 
 	case *ast.AndOrExpression:
-		// 0: analyze the expression & type check
 		exprType, _ := st.Analyze(node.Expression, scope)
-		if exprType != token.INTEGER || exprType != token.FLOAT {
-			return "", fmt.Errorf("Expression: Bitwise And/Or/Not expression must be of type int (or float)")
+		if exprType != token.INTEGER {
+			return "", fmt.Errorf("Bitwise Expression: Expression must be of type int")
 		}
-
-		// TODO(codegen): if type is float, we will truncate it to int in code generation
-
-		return "", nil
+		return token.INTEGER, nil
 
 	case *ast.ArithmeticOperation:
+		// 0: analyze relation & type check
+		relType, _ := st.Analyze(node.Relation, scope)
+		arithopReturnType := relType
+		// if no list of +, - expressions is present, then type doesn't matter
+		if len(node.AddSubList) == 0 {
+			return arithopReturnType, nil
+		}
+
+		// 1: if a list of +, - expressions is present, then relation must be of type int or float
+		if relType != token.INTEGER && relType != token.FLOAT {
+			return "", fmt.Errorf("Arithmetic Operation: Relation must be of type int or float")
+		}
+
+		// 2: analyze AddSub list expression & type check for int or float
+		for _, e := range node.AddSubList {
+			exprType, _ := st.Analyze(&e, scope)
+			if exprType == token.FLOAT { // if float is present, then int is cast to float
+				arithopReturnType = token.FLOAT
+			}
+		}
+
+		// 3: return the type of the arithmetic operation
+		return arithopReturnType, nil
 
 	case *ast.AddSubExpression:
+		exprType, _ := st.Analyze(node.ArithmeticOperation, scope)
+		if exprType != token.INTEGER && exprType != token.FLOAT {
+			return "", fmt.Errorf("AddSub Expression: Arithmetic Operation must be of type int or float")
+		}
+		return exprType, nil
 
 	case *ast.Relation:
+		// float - float, int | bool with int | bool, string with string
+		// 0: analyze the term
+		termType, _ := st.Analyze(node.Term, scope)
+		// if no list of relational expressions is present, then type doesn't matter
+		if len(node.RelationalOperationList) == 0 {
+			return termType, nil
+		}
+
+		// 1: if a list of relational expressions is present, then we must to proper type checking
+		leftTermType := string(termType)
+		for _, e := range node.RelationalOperationList {
+			relOpType, _ := st.Analyze(&e, scope)
+			rightTermType := string(relOpType)
+			if !RelationTypeCompatible(e.Operator, leftTermType, rightTermType) {
+				return "", fmt.Errorf("Relation: Type mismatch")
+			}
+			leftTermType = rightTermType
+		}
+
+		// 2: return the type of the relation
+		return token.BOOLEAN, nil
 
 	case *ast.RelationalExpression:
+		// 0: analyze the relation
+		relType, _ := st.Analyze(node.Term, scope)
+		// strings can only be used with == and !=
+		if relType == token.STR && (node.Operator != "==" && node.Operator != "!=") {
+			return "", fmt.Errorf("Relational Expression: Strings can only be used with == and !=")
+		}
+		return relType, nil
 
 	case *ast.Term:
+		// 0: analyze the factor
+		factorType, _ := st.Analyze(node.Factor, scope)
+		termReturnType := factorType
+		if len(node.MultDivList) == 0 {
+			return factorType, nil
+		}
+
+		// 1: if a list of *, / expressions is present, then factor must be of type int or float
+		if factorType != token.INTEGER && factorType != token.FLOAT {
+			return "", fmt.Errorf("Term: Factor must be of type int or float")
+		}
+
+		// 2: analyze the mult div list
+		for _, e := range node.MultDivList {
+			multdivType, _ := st.Analyze(&e, scope)
+			if multdivType == token.FLOAT {
+				// if float is present, then int is cast to float
+				termReturnType = multdivType
+			}
+		}
+
+		// 3: return the type of the term
+		return termReturnType, nil
 
 	case *ast.MultDivExpression:
+		// 0: analuze mult, div term
+		termType, _ := st.Analyze(node.Factor, scope)
+		if termType != token.INTEGER && termType != token.FLOAT {
+			return "", fmt.Errorf("MultDiv Expression: Factor must be of type int or float")
+		}
+		return termType, nil
 
 	case *ast.Factor:
+		if node.IsExpression {
+			exprType, _ := st.Analyze(node.Expression, scope)
+			return exprType, nil
+		}
+
+		if node.IsProcedureCall {
+			procType, _ := st.Analyze(node.ProcedureCall, scope)
+			return procType, nil
+		}
+
+		if node.IsName {
+			nameType, _ := st.Analyze(node.Name, scope)
+			return nameType, nil
+		}
+
+		if node.IsNumber {
+			numType, _ := st.Analyze(node.Number, scope)
+			return numType, nil
+		}
+
+		if node.IsString {
+			st.Analyze(node.String, scope)
+		}
+
+		if node.IsBool {
+			if node.BoolValue == "true" || node.BoolValue == "false" {
+				return token.BOOLEAN, nil
+			}
+			return "", fmt.Errorf("Factor: Invalid boolean value")
+		}
+
+		return "", nil
 
 	case *ast.Name:
 		// 0: get name, check if in symbol table, in scope, and if it is an array
