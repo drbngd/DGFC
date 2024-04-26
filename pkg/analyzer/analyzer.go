@@ -87,6 +87,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		// 2: add procedure to symbol table
 		sym := st.NewSymbol(procName, "Procedure", procReturnType, scope, true, paramTypeList, false, "0")
 		st.table[procName+hashKey+".PROC"] = sym
+		st.IncrementIndex()
 
 		// 3: add procedure's params to symbol table
 		for _, p := range paramList {
@@ -98,7 +99,6 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			}
 			sym := st.NewSymbol(paramName, "Procedure Param", paramType, newScope, false, nil, isArray, "0")
 			st.AddSymbol(sym)
-			st.IncrementIndex()
 		}
 
 		// 4: analyze the header & body
