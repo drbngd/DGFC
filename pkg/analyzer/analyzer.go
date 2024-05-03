@@ -1,3 +1,10 @@
+// TODO - what all doesn't work
+// correct/test1b.src program - is working now
+// implement InSymbolTable() function for proc, var
+// incorrect/all programs
+// not catching forward declarations
+// duplicate declarations
+
 package analyzer
 
 import (
@@ -79,7 +86,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		if ok {
 			return "", fmt.Errorf("Procedure Declaration: Procedure '%s' already declared in the current scope", procName)
 		}
-		hashKey := st.GetProcedureKey(procName, newScope)
+		hashKey := st.GetProcedureKey(procName, scope)
 		//if ok && SameIndex(symObj.Index, st.GetIndex()) && InSameScope(symObj.Scope, scope) {
 		//	return "", fmt.Errorf("Procedure Declaration: Procedure '%s' already declared in the same scope", procName)
 		//}
@@ -91,14 +98,25 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 
 		// 3: add procedure's params to symbol table
 		for _, p := range paramList {
+			print("\n+++++ analyzing procodure params now +++++\n")
 			paramName := p.Identifier.Name
 			paramType := p.Type.Name
 			isArray := p.IsArray
 			if p.IsGlobal {
 				return "", fmt.Errorf("Procedure Declaration: Parameters cannot be global")
 			}
+
+			hashKey, ok := st.VariableExists(paramName, newScope)
+			if ok {
+				return "", fmt.Errorf("Procedure Param: Param '%s' already declared in the current scope", paramName)
+			}
+			//hashKey := st.GetVariableKey(paramName, scope)
+			print("\nparam " + paramName + " hashkey: " + hashKey + "\n")
+
 			sym := st.NewSymbol(paramName, "Procedure Param", paramType, newScope, false, nil, isArray, "0")
-			st.AddSymbol(sym)
+			//st.AddSymbol(sym)
+			st.table[paramName+hashKey] = sym
+			st.IncrementIndex()
 		}
 
 		// 4: analyze the header & body
@@ -150,11 +168,10 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 
 		print("on step 0\n")
 		// 0: get variable name, type, and scope
-		name := &node.Identifier.Name
-		print(*name)
+		name := node.Identifier.Name
+		print(name)
 		print("\non step 0.1\n")
 		varType := &node.Type.Name
-		print("on step 0.2\n")
 		arrBound := "0"
 		if node.IsArray {
 			arrBound = node.Bound.Value.Value
@@ -169,16 +186,31 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		}
 
 		print("on step 1\n")
-		// 1: check if already exists in the symbol table with the same scope
-		varSym, ok := st.table[*name]
-		if ok && ScopeCompatible(newScope, varSym.Scope) && SameIndex(varSym.Index, st.GetIndex()) {
-			return "", fmt.Errorf("Variable Declaration: Variable '%s' already declared in the same scope", name)
+		hashKey, ok := st.VariableExists(name, newScope)
+		if ok {
+			print("\nvariable encountered in same scope")
+			print("\nvariable is: " + name)
+			print("\n current scope is: " + newScope + "\n")
+			return "", fmt.Errorf("Variable Declaration: Variable '%s' already declared in the current scope", name)
 		}
+		//hashKey := st.GetVariableKey(name, scope)
+		print(name)
+		print("\nhash key\n")
+		print(hashKey)
+		print("\n")
+
+		//// 1: check if already exists in the symbol table with the same scope
+		//varSym, ok := st.table[*name]
+		//if ok && ScopeCompatible(newScope, varSym.Scope) && SameIndex(varSym.Index, st.GetIndex()) {
+		//	return "", fmt.Errorf("Variable Declaration: Variable '%s' already declared in the same scope", name)
+		//}
 
 		print("on step 2\n")
 		// 2: add to symbol table
-		sym := st.NewSymbol(*name, "Variable", *varType, newScope, false, nil, node.IsArray, arrBound)
-		st.AddSymbol(sym)
+		sym := st.NewSymbol(name, "Variable", *varType, newScope, false, nil, node.IsArray, arrBound)
+		//st.AddSymbol(sym)
+		st.table[name+hashKey] = sym
+		st.IncrementIndex()
 
 		print("on step 3\n")
 		// 3: return the type of the variable
@@ -215,14 +247,19 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		procName := node.Identifier.Name
 
 		// 1: check if procedure is already declared in the current scope, get return type and param list
-		symObj, ok := st.table[procName+".PROC"]
+		//symObj, ok := st.table[procName+".PROC"]
+		key, ok := st.ProcedureExists(procName, scope)
+		symObj, _ := st.table[procName+key+".PROC"]
+		print("checking call for:" + procName + "\n")
 		if !ok {
+			print("\n\n" + procName + " is not present in symbol table\n\n")
 			return "", fmt.Errorf("Procedure Call: Procedure '%s' not found in symbol table", procName)
 		} else {
 			if !ScopeCompatible(scope, symObj.Scope) {
 				return "", fmt.Errorf("Procedure Call: Procedure '%s' not in scope", procName)
 			}
 		}
+
 		procParamList := symObj.ParamTypeList
 
 		// 2: check if number of arguments match & if argument types match
@@ -268,15 +305,16 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		print("Analyzing Destination\n")
 		// 0: check if present in symbol table & in current scope, get type
 		destName := node.Identifier.Name
-		symObj, ok := st.table[destName]
+		key, ok := st.VariableExists(destName, scope)
+		symObj, _ := st.table[destName]
 		if !ok {
 			return "", fmt.Errorf("Destination: '%s' not found in symbol table", destName)
 		} else {
-			if !ScopeCompatible(scope, symObj.Scope) {
+			if !ScopeCompatible(symObj.Scope, scope) {
 				return "", fmt.Errorf("Destination: '%s' not in scope", destName)
 			}
 		}
-		destType := st.table[destName].ReturnType
+		destType := st.table[destName+key].ReturnType
 
 		// 1: analyze identifier & expression
 		st.Analyze(node.Identifier, scope)
@@ -516,6 +554,10 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 
 		if node.IsProcedureCall {
 			procType, _ := st.Analyze(node.ProcedureCall, scope)
+			//if !err {
+			//	os.Exit(1)
+			//}
+			print("\nhere nothing happens after error is thrown\n")
 			return procType, nil
 		}
 
@@ -608,7 +650,7 @@ func GetProcedureParams(pd ast.ProcedureDeclaration) ([]ast.VariableDeclaration,
 	return params, paramsType
 }
 
-// TODO - need to test is
+// TODO - need to add to avoid numbers in scope name
 func GetLastProcedureName(scope string) string {
 	// Split the scope string by the period character
 	elements := strings.Split(scope, ".")
@@ -617,7 +659,7 @@ func GetLastProcedureName(scope string) string {
 	// Iterate over the elements in reverse order
 	for i := len(elements) - 1; i >= 0; i-- {
 		// If the element is not a keyword (GLOBAL, IF, LOOP, ELSE), return it
-		if elements[i] != "ELSE" && elements[i] != "THEN" && elements[i] != "IF" && elements[i] != "LOOP" && elements[i] != "GLOBAL" {
+		if /*avoid numbers (if/loop count)*/ elements[i] != "ELSE" && elements[i] != "THEN" && elements[i] != "IF" && elements[i] != "LOOP" && elements[i] != "GLOBAL" {
 			return elements[i]
 		}
 	}
@@ -656,6 +698,10 @@ func InSameScope(scope1, scope2 string) bool {
 
 func ScopeCompatible(currScope, symbolScope string) bool {
 	return strings.HasPrefix(symbolScope, currScope)
+}
+
+func ScopeLesserThan(currScope, symbolScope string) bool {
+	return strings.HasPrefix(symbolScope, currScope) && !InSameScope(currScope, symbolScope)
 }
 
 func AssignmentTypeCompatible(destType, exprType string) bool {
@@ -712,11 +758,23 @@ func RelationTypeCompatible(op, type1, type2 string) bool {
 	return false
 }
 
+// to deal with nested functions with same names
 func (st *SymbolTable) GetProcedureKey(name, scope string) string {
 	symObj, ok := st.table[name+".PROC"]
 	if ok && ScopeCompatible(symObj.Scope, scope) {
 		count := CountOccurrences(scope, name)
 		hashKey := strings.Repeat(".PROC", count)
+		return hashKey
+	} else {
+		return ""
+	}
+}
+
+func (st *SymbolTable) GetVariableKey(name, scope string) string {
+	symObj, ok := st.table[name]
+	if ok && ScopeCompatible(symObj.Scope, scope) {
+		count := CountOccurrences(scope, name)
+		hashKey := strings.Repeat(".VAR", count)
 		return hashKey
 	} else {
 		return ""
@@ -751,6 +809,34 @@ func (st *SymbolTable) ProcedureExists(name, scope string) (string, bool) {
 		return key, true
 	}
 	return key, false
+}
+
+// 1: check name + n*(.VAR)
+// 1.1 check if current scope is contained
+
+func (st *SymbolTable) VariableExists(name, scope string) (string, bool) {
+	// get count
+	print("checking if variable exists")
+	i := 0
+	for i <= st.index {
+		key := strings.Repeat(".VAR", i)
+		symbObj, ok := st.table[name+key]
+		if ok && (ScopeLesserThan(symbObj.Scope, scope) || !InSameScope(symbObj.Scope, scope)) {
+			_, ok1 := st.table[name+key+".VAR"]
+			if !ok1 {
+				return key + ".VAR", false
+			}
+		} else if ok && (InSameScope(symbObj.Scope, scope) || ScopeCompatible(scope, symbObj.Scope)) {
+			return key, true
+			//} else if ok {
+			//	return "", true
+		} else {
+			return "", false
+		}
+		i++
+	}
+	return "", true
+
 }
 
 // todo - expr type - type must match

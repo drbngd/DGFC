@@ -32,6 +32,7 @@ type SymbolTable struct {
 	index        int
 	IfElseCount  int
 	ForLoopCount int
+	errors       []string
 }
 
 func NewSymbolTable() *SymbolTable {

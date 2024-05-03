@@ -11,7 +11,7 @@ import (
 
 const PROMPT = ">> "
 
-const fileLocation = "test/correct/multipleProcs.src"
+const fileLocation = "test/correct/test1b.src"
 
 func Start(in io.Reader, out io.Writer) {
 	fileContent, err := os.ReadFile(fileLocation)
