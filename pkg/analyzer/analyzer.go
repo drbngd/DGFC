@@ -28,9 +28,11 @@ type Analyzer struct {
 }
 
 func New() *Analyzer {
-	return &Analyzer{
+	analyzr := Analyzer{
 		SymbolTable: NewSymbolTable(),
 	}
+	analyzr.SymbolTable.AddBuiltIns()
+	return &analyzr
 }
 
 func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) {
@@ -84,6 +86,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		// 1: check if procedure is already declared
 		_, ok := st.ProcedureExists(procName, newScope)
 		if ok {
+			st.ReportError(fmt.Errorf("Procedure Declaration: Procedure '%s' already declared in the current scope", procName))
 			return "", fmt.Errorf("Procedure Declaration: Procedure '%s' already declared in the current scope", procName)
 		}
 		hashKey := st.GetProcedureKey(procName, scope)
@@ -103,11 +106,13 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			paramType := p.Type.Name
 			isArray := p.IsArray
 			if p.IsGlobal {
+				st.ReportError(fmt.Errorf("Procedure Declaration: Parameters cannot be global"))
 				return "", fmt.Errorf("Procedure Declaration: Parameters cannot be global")
 			}
 
 			hashKey, ok := st.VariableExists(paramName, newScope)
 			if ok {
+				st.ReportError(fmt.Errorf("Procedure Param: Param '%s' already declared in the current scope", paramName))
 				return "", fmt.Errorf("Procedure Param: Param '%s' already declared in the current scope", paramName)
 			}
 			//hashKey := st.GetVariableKey(paramName, scope)
@@ -176,6 +181,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		if node.IsArray {
 			arrBound = node.Bound.Value.Value
 			if GetNumberType(arrBound) != token.INTEGER {
+				st.ReportError(fmt.Errorf("Variable Declaration: Array bound must be an integer"))
 				return "", fmt.Errorf("Variable Declaration: Array bound must be an integer")
 			}
 		}
@@ -191,6 +197,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			print("\nvariable encountered in same scope")
 			print("\nvariable is: " + name)
 			print("\n current scope is: " + newScope + "\n")
+			st.ReportError(fmt.Errorf("Variable Declaration: Variable '%s' already declared in the current scope", name))
 			return "", fmt.Errorf("Variable Declaration: Variable '%s' already declared in the current scope", name)
 		}
 		//hashKey := st.GetVariableKey(name, scope)
@@ -223,6 +230,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 
 		// 1: check if type is valid
 		if typeName != token.INTEGER && typeName != token.FLOAT && typeName != token.BOOLEAN && typeName != token.STRING {
+			st.ReportError(fmt.Errorf("TypeMark: Invalid type '%s'", typeName))
 			return "", fmt.Errorf("TypeMark: Invalid type '%s'", typeName)
 		}
 
@@ -236,6 +244,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			return "", err
 		}
 		if GetNumberType(node.Value.Value) != token.INTEGER {
+			st.ReportError(fmt.Errorf("Bound: Bound must be an integer"))
 			return "", fmt.Errorf("Bound: Bound must be an integer")
 		}
 
@@ -250,12 +259,14 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		//symObj, ok := st.table[procName+".PROC"]
 		key, ok := st.ProcedureExists(procName, scope)
 		symObj, _ := st.table[procName+key+".PROC"]
-		print("checking call for:" + procName + "\n")
+		print("checking call for:" + procName + key + ".PROC" + "\n")
 		if !ok {
 			print("\n\n" + procName + " is not present in symbol table\n\n")
+			st.ReportError(fmt.Errorf("Procedure Call: Procedure '%s' not found in symbol table", procName))
 			return "", fmt.Errorf("Procedure Call: Procedure '%s' not found in symbol table", procName)
 		} else {
 			if !ScopeCompatible(scope, symObj.Scope) {
+				st.ReportError(fmt.Errorf("Procedure Call: Procedure '%s' not in scope", procName))
 				return "", fmt.Errorf("Procedure Call: Procedure '%s' not in scope", procName)
 			}
 		}
@@ -264,6 +275,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 
 		// 2: check if number of arguments match & if argument types match
 		if len(node.ArguementList.Arguments) != len(procParamList) {
+			st.ReportError(fmt.Errorf("Procedure Call: Number of arguments do not match"))
 			return "", fmt.Errorf("Procedure Call: Number of arguments do not match")
 		}
 		for i, e := range node.ArguementList.Arguments {
@@ -271,6 +283,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			if err != nil {
 				return nodeType, err
 			} else if nodeType != ReturnType(procParamList[i]) {
+				st.ReportError(fmt.Errorf("Procedure Call: Argument type mismatch"))
 				return "", fmt.Errorf("Procedure Call: Argument type mismatch")
 			}
 		}
@@ -295,6 +308,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 
 		// 1: type check destination & expression
 		if !AssignmentTypeCompatible(string(destType), string(exprType)) {
+			st.ReportError(fmt.Errorf("Assignment Statement: Destination & Expression type mismatch"))
 			return "", fmt.Errorf("Assignment Statement: Destination & Expression type mismatch")
 		}
 
@@ -311,6 +325,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			return "", fmt.Errorf("Destination: '%s' not found in symbol table", destName)
 		} else {
 			if !ScopeCompatible(symObj.Scope, scope) {
+				st.ReportError(fmt.Errorf("Destination: '%s' not in scope", destName))
 				return "", fmt.Errorf("Destination: '%s' not in scope", destName)
 			}
 		}
@@ -323,6 +338,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		// 2: if array: check if that expression is an integer, and index is within bounds
 		if node.IsArray {
 			if exprType != token.INTEGER {
+				st.ReportError(fmt.Errorf("Destination: Array index must be an integer"))
 				return "", fmt.Errorf("Destination: Array index must be an integer")
 			}
 			// TODO(codegen): Bounds checking to be done in code generation
@@ -338,6 +354,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		// 1:  analyze condition & type check
 		condType, _ := st.Analyze(node.Condition, scope)
 		if !(condType == token.BOOLEAN || condType == token.INTEGER) {
+			st.ReportError(fmt.Errorf("If Statement: Condition must be of type bool (or int)"))
 			return "", fmt.Errorf("If Statement: Condition must be of type bool (or int)")
 		}
 
@@ -365,6 +382,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		// 2: analyze condition statement & type check
 		condType, _ := st.Analyze(node.Condition, scope)
 		if !(condType == token.BOOLEAN || condType == token.INTEGER) {
+			st.ReportError(fmt.Errorf("Loop Statement: Condition must be of type bool (or int)"))
 			return "", fmt.Errorf("Loop Statement: Condition must be of type bool (or int)")
 		}
 
@@ -384,10 +402,12 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		assocProcName := GetLastProcedureName(scope)
 		symObj, ok := st.table[assocProcName+".PROC"]
 		if !ok {
+			st.ReportError(fmt.Errorf("Return Statement: Parent Procedure not found"))
 			return "", fmt.Errorf("Return Statement: Parent Procedure not found")
 		}
 
 		if string(exprType) != symObj.ReturnType {
+			st.ReportError(fmt.Errorf("Return Statement: Return type does not match parent procedure return type"))
 			return "", fmt.Errorf("Return Statement: Return type does not match parent procedure return type")
 		}
 
@@ -422,6 +442,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		print("on step 1\n")
 		// 1: if an bitwise and/or/not list is present, then arithmetic operation must be of type int
 		if arithopType != token.INTEGER {
+			st.ReportError(fmt.Errorf("Expression: Bitwise Operation must be of type int"))
 			return "", fmt.Errorf("Expression: Bitwise operations must be of type int")
 		}
 		// TODO(codegen): if type is float, we will truncate it to int in code generation
@@ -438,6 +459,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		print("Analyzing AndOr Expression\n")
 		exprType, _ := st.Analyze(node.Expression, scope)
 		if exprType != token.INTEGER {
+			st.ReportError(fmt.Errorf("Bitwise Expression: Expression must be of type int"))
 			return "", fmt.Errorf("Bitwise Expression: Expression must be of type int")
 		}
 		return token.INTEGER, nil
@@ -454,6 +476,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 
 		// 1: if a list of +, - expressions is present, then relation must be of type int or float
 		if relType != token.INTEGER && relType != token.FLOAT {
+			st.ReportError(fmt.Errorf("Arithmetic Operation: Relation must be of type int or float"))
 			return "", fmt.Errorf("Arithmetic Operation: Relation must be of type int or float")
 		}
 
@@ -472,6 +495,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		print("Analyzing AddSub Expression\n")
 		exprType, _ := st.Analyze(node.ArithmeticOperation, scope)
 		if exprType != token.INTEGER && exprType != token.FLOAT {
+			st.ReportError(fmt.Errorf("AddSub Expression: Arithmetic Operation must be of type int or float"))
 			return "", fmt.Errorf("AddSub Expression: Arithmetic Operation must be of type int or float")
 		}
 		return exprType, nil
@@ -506,6 +530,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		relType, _ := st.Analyze(node.Term, scope)
 		// strings can only be used with == and !=
 		if relType == token.STR && (node.Operator != "==" && node.Operator != "!=") {
+			st.ReportError(fmt.Errorf("Relational Expression: Strings can only be used with == and !="))
 			return "", fmt.Errorf("Relational Expression: Strings can only be used with == and !=")
 		}
 		return relType, nil
@@ -521,6 +546,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 
 		// 1: if a list of *, / expressions is present, then factor must be of type int or float
 		if factorType != token.INTEGER && factorType != token.FLOAT {
+			st.ReportError(fmt.Errorf("Term: Factor must be of type int or float"))
 			return "", fmt.Errorf("Term: Factor must be of type int or float")
 		}
 
@@ -541,6 +567,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		// 0: analuze mult, div term
 		termType, _ := st.Analyze(node.Factor, scope)
 		if termType != token.INTEGER && termType != token.FLOAT {
+			st.ReportError(fmt.Errorf("MultDiv Expression: Factor must be of type int or float"))
 			return "", fmt.Errorf("MultDiv Expression: Factor must be of type int or float")
 		}
 		return termType, nil
@@ -579,6 +606,7 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 			if node.BoolValue == "true" || node.BoolValue == "false" {
 				return token.BOOLEAN, nil
 			}
+			st.ReportError(fmt.Errorf("Factor: Invalid boolean value"))
 			return "", fmt.Errorf("Factor: Invalid boolean value")
 		}
 
@@ -590,15 +618,19 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		name := node.Identifier.Name
 		symObj, ok := st.table[name]
 		if !ok {
+			st.ReportError(fmt.Errorf("Name: '%s' not found in symbol table", name))
 			return "", fmt.Errorf("Name: '%s' not found in symbol table", name)
 		} else {
 			if !ScopeCompatible(scope, symObj.Scope) {
+				st.ReportError(fmt.Errorf("Name: '%s' not in scope", name))
 				return "", fmt.Errorf("Name: '%s' not in scope", name)
 			}
 			if node.IsArray && !symObj.IsArray {
+				st.ReportError(fmt.Errorf("Name: '%s' is not an array", name))
 				return "", fmt.Errorf("Name: '%s' is not an array", name)
 			}
 			if !node.IsArray && symObj.IsArray {
+				st.ReportError(fmt.Errorf("Name: '%s' is an array", name))
 				return "", fmt.Errorf("Name: '%s' is an array", name)
 			}
 		}
@@ -607,6 +639,8 @@ func (st *SymbolTable) Analyze(node ast.Node, scope string) (ReturnType, error) 
 		st.Analyze(node.Identifier, scope)
 		exprType, _ := st.Analyze(node.Expression, scope)
 		if exprType != token.INTEGER {
+			st.ReportError(fmt.Errorf("Name: Array index must be an integer"))
+			return "", nil
 			return "", fmt.Errorf("Name: Array index must be an integer")
 		}
 

@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"DGFC/pkg/token"
 	"fmt"
 	"os"
 	"sort"
@@ -41,6 +42,7 @@ func NewSymbolTable() *SymbolTable {
 		index:        0,
 		IfElseCount:  0,
 		ForLoopCount: 0,
+		errors:       []string{},
 	}
 }
 
@@ -69,6 +71,21 @@ func (st *SymbolTable) AddSymbol(s Symbol) (bool, Symbol) {
 		st.table[s.Name] = s
 		return true, s
 	}
+}
+
+func (st *SymbolTable) AddBuiltIns() {
+	// getter functions
+	st.AddSymbol(st.NewSymbol("getbool", "PROCEDURE", token.BOOLEAN, "GLOBAL", true, nil, false, ""))
+	st.AddSymbol(st.NewSymbol("getinteger", "PROCEDURE", token.INTEGER, "GLOBAL", true, nil, false, ""))
+	st.AddSymbol(st.NewSymbol("getfloat", "PROCEDURE", token.FLOAT, "GLOBAL", true, nil, false, ""))
+	st.AddSymbol(st.NewSymbol("getstring", "PROCEDURE", token.STR, "GLOBAL", true, nil, false, ""))
+	// putter functions
+	st.AddSymbol(st.NewSymbol("putbool", "PROCEDURE", token.BOOLEAN, "GLOBAL", true, []string{token.BOOLEAN}, false, ""))
+	st.AddSymbol(st.NewSymbol("putinteger", "PROCEDURE", token.INTEGER, "GLOBAL", true, []string{token.INTEGER}, false, ""))
+	st.AddSymbol(st.NewSymbol("putfloat", "PROCEDURE", token.FLOAT, "GLOBAL", true, []string{token.FLOAT}, false, ""))
+	st.AddSymbol(st.NewSymbol("putstring", "PROCEDURE", token.STR, "GLOBAL", true, []string{token.STR}, false, ""))
+	// math function
+	st.AddSymbol(st.NewSymbol("sqrt", "PROCEDURE", token.FLOAT, "GLOBAL", true, []string{token.INTEGER}, false, ""))
 }
 
 func (st *SymbolTable) IncrementIndex() {
@@ -107,4 +124,14 @@ func (st *SymbolTable) PrintSymbolTable() {
 		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\t%v\t%v\t%v\t%s\t\n", value.Index, key, value.Name, value.NodeType, value.ReturnType, value.Scope, value.IsProcedure, value.ParamTypeList, value.IsArray, value.ArraySize)
 	}
 	w.Flush()
+}
+
+func (st *SymbolTable) GetErrors() []string {
+	return st.errors
+}
+
+func (st *SymbolTable) ReportError(err error) {
+	st.errors = append(st.errors, err.Error())
+	//os.Exit(1)
+
 }

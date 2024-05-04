@@ -36,9 +36,16 @@ func Start(in io.Reader, out io.Writer) {
 	// analyzing the program
 	fmt.Println(out, "\n\n++++++++STARTING ANALYSIS++++++++\n\n")
 	anlyz := analyzer.New()
-	_, err = anlyz.SymbolTable.Analyze(program, "GLOBAL")
-	if err != nil {
+	anlyz.SymbolTable.PrintSymbolTable()
+	anlyz.SymbolTable.Analyze(program, "GLOBAL")
+	anlyz.SymbolTable.PrintSymbolTable()
+
+	if len(anlyz.SymbolTable.GetErrors()) != 0 {
 		fmt.Println(out, "Error analyzing program: %s\n", err)
+		// print all the errors:
+		for _, msg := range anlyz.SymbolTable.GetErrors() {
+			fmt.Println(out, msg)
+		}
 		return
 	}
 
